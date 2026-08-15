@@ -52,8 +52,14 @@ export interface Messages {
     importSnapshots: string;
     imported: string;
     invalidImport: string;
+    quota: string;
     label: string;
     notes: string;
+    pauseClip: string;
+    playClip: string;
+    clipEnd: string;
+    clipSelection: string;
+    clipStart: string;
     save: string;
     saved: string;
     title: string;
@@ -147,8 +153,14 @@ export const MESSAGES: Record<Locale, Messages> = {
       importSnapshots: 'Import snapshots',
       imported: 'Snapshots imported locally.',
       invalidImport: 'The snapshot file could not be imported.',
+      quota: 'Local storage is full. Export your snapshots and remove older data before retrying.',
       label: 'Snapshot label',
       notes: 'Notes about this test',
+      pauseClip: 'Pause clip',
+      playClip: 'Play selected clip',
+      clipEnd: 'Selection end',
+      clipSelection: 'Select a clip range',
+      clipStart: 'Selection start',
       save: 'Save snapshot',
       saved: 'Snapshot saved locally.',
       title: 'Test snapshots',
@@ -289,8 +301,15 @@ export const MESSAGES: Record<Locale, Messages> = {
       importSnapshots: '스냅샷 가져오기',
       imported: '스냅샷을 로컬로 가져왔습니다.',
       invalidImport: '스냅샷 파일을 가져오지 못했습니다.',
+      quota:
+        '로컬 저장 공간이 가득 찼습니다. 스냅샷을 내보내고 오래된 데이터를 삭제한 뒤 다시 시도하세요.',
       label: '스냅샷 이름',
       notes: '테스트 메모',
+      pauseClip: '클립 일시정지',
+      playClip: '선택 구간 재생',
+      clipEnd: '선택 끝',
+      clipSelection: '클립 구간 선택',
+      clipStart: '선택 시작',
       save: '스냅샷 저장',
       saved: '스냅샷을 로컬에 저장했습니다.',
       title: '테스트 스냅샷',

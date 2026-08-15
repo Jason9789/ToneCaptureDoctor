@@ -479,6 +479,48 @@ canvas {
   white-space: pre-wrap;
 }
 
+.snapshot-audio-player {
+  display: grid;
+  gap: 0.55rem;
+  margin-top: 0.8rem;
+  border-top: 1px solid rgba(155, 228, 193, 0.12);
+  padding-top: 0.8rem;
+}
+
+.snapshot-audio-player audio {
+  width: 100%;
+  height: 2rem;
+}
+
+.clip-selection-heading,
+.clip-range {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #a7bcb3;
+  font-size: 0.75rem;
+}
+
+.clip-selection-heading {
+  justify-content: space-between;
+}
+
+.clip-range span {
+  min-width: 5.4rem;
+}
+
+.clip-range input {
+  min-width: 0;
+  padding: 0;
+}
+
+.clip-range output {
+  min-width: 3.5rem;
+  color: #d4e6dd;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 @media (max-width: 760px) {
   .app-header {
     align-items: flex-start;

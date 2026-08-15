@@ -3,6 +3,18 @@ import type { AudioMetrics } from '@tone-capture-doctor/audio-core';
 export const SNAPSHOT_SCHEMA_VERSION = 1;
 export const TEST_LOG_SCHEMA_VERSION = 1;
 
+export type LocalStorageErrorCode = 'quota' | 'unavailable' | 'unknown';
+
+export class LocalStorageError extends Error {
+  readonly code: LocalStorageErrorCode;
+
+  constructor(code: LocalStorageErrorCode, message: string, options?: ErrorOptions) {
+    super(message, options);
+    this.name = 'LocalStorageError';
+    this.code = code;
+  }
+}
+
 export interface SnapshotRecord {
   algorithmVersion: string;
   audioClip?: Blob;
@@ -140,6 +152,30 @@ function createId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
+function normalizeStorageError(error: unknown): LocalStorageError {
+  const name =
+    (typeof DOMException !== 'undefined' && error instanceof DOMException) || error instanceof Error
+      ? error.name
+      : undefined;
+  if (name === 'QuotaExceededError') {
+    return new LocalStorageError(
+      'quota',
+      'Local browser storage is full. Export snapshots and remove older data before trying again.',
+      { cause: error },
+    );
+  }
+  if (name === 'InvalidStateError' || name === 'NotFoundError') {
+    return new LocalStorageError(
+      'unavailable',
+      'Local browser storage is unavailable in this context.',
+      { cause: error },
+    );
+  }
+  return new LocalStorageError('unknown', 'Local browser storage request failed.', {
+    cause: error,
+  });
+}
+
 export function createSessionId(): string {
   return createId('session');
 }
@@ -149,11 +185,15 @@ export async function saveSnapshot(snapshot: SnapshotRecord): Promise<void> {
     memorySnapshots.set(snapshot.id, snapshot);
     return;
   }
-  const database = await openDatabase();
-  const transaction = database.transaction(SNAPSHOT_STORE, 'readwrite');
-  transaction.objectStore(SNAPSHOT_STORE).put(snapshot);
-  await transactionComplete(transaction);
-  memorySnapshots.set(snapshot.id, snapshot);
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(SNAPSHOT_STORE, 'readwrite');
+    transaction.objectStore(SNAPSHOT_STORE).put(snapshot);
+    await transactionComplete(transaction);
+    memorySnapshots.set(snapshot.id, snapshot);
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
 }
 
 export async function listSnapshots(): Promise<SnapshotRecord[]> {
@@ -173,10 +213,14 @@ export async function deleteSnapshot(snapshotId: string): Promise<void> {
   if (!hasIndexedDb()) {
     return;
   }
-  const database = await openDatabase();
-  const transaction = database.transaction(SNAPSHOT_STORE, 'readwrite');
-  transaction.objectStore(SNAPSHOT_STORE).delete(snapshotId);
-  await transactionComplete(transaction);
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(SNAPSHOT_STORE, 'readwrite');
+    transaction.objectStore(SNAPSHOT_STORE).delete(snapshotId);
+    await transactionComplete(transaction);
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
 }
 
 export async function saveTestLogSession(session: TestLogSession): Promise<void> {

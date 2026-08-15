@@ -102,4 +102,45 @@ describe('local test session storage', () => {
       },
     );
   });
+
+  it('lists 100 local snapshots without a slow storage scan', async () => {
+    const startedAt = performance.now();
+    await Promise.all(
+      Array.from({ length: 100 }, (_, index) =>
+        saveSnapshot({
+          algorithmVersion: '0.1.0',
+          channelCount: 1,
+          createdAt: new Date(Date.now() + index).toISOString(),
+          endSample: index + 1,
+          fftSize: 2_048,
+          id: `performance-${createSessionId()}`,
+          label: `Performance ${index}`,
+          metrics: {
+            clippingCandidate: false,
+            crestFactorDb: null,
+            dominantFrequencyHz: null,
+            humFrequencyHz: null,
+            noiseFloorDbfs: -60,
+            peakDbfs: -12,
+            rmsDbfs: -18,
+            sampleCount: index + 1,
+            sampleRate: 48_000,
+          },
+          notes: '',
+          sampleRate: 48_000,
+          schemaVersion: 1,
+          sessionId: createSessionId(),
+          spectrum: [],
+          startSample: index,
+          waveform: [],
+          window: 'hann',
+        }),
+      ),
+    );
+    const snapshots = await listSnapshots();
+    expect(snapshots.filter((snapshot) => snapshot.label.startsWith('Performance')).length).toBe(
+      100,
+    );
+    expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
 });

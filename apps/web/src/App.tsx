@@ -19,6 +19,7 @@ import {
   type Locale,
 } from './i18n';
 import { SignalVisualizer, type SignalFrameData } from './SignalVisualizer';
+import { SnapshotAudioPlayer } from './SnapshotAudioPlayer';
 import {
   createSessionId,
   deleteSnapshot,
@@ -29,6 +30,7 @@ import {
   saveSnapshot,
   SNAPSHOT_SCHEMA_VERSION,
   TestLogWriter,
+  LocalStorageError,
   type SnapshotRecord,
 } from './sessionStore';
 
@@ -385,8 +387,12 @@ export function App() {
       setSnapshotLabel('');
       setSnapshotNotes('');
       setSnapshotMessage(audioClip ? t.snapshots.audioClipSaved : t.snapshots.saved);
-    } catch {
-      setSnapshotMessage(t.snapshots.error);
+    } catch (error) {
+      setSnapshotMessage(
+        error instanceof LocalStorageError && error.code === 'quota'
+          ? t.snapshots.quota
+          : t.snapshots.error,
+      );
     }
   }, [logSessionId, metrics, session, snapshotLabel, snapshotNotes, snapshots.length, t.snapshots]);
 
@@ -395,10 +401,18 @@ export function App() {
       if (!window.confirm(t.snapshots.deleteConfirm)) {
         return;
       }
-      await deleteSnapshot(snapshotId);
-      setSnapshots(await listSnapshots());
+      try {
+        await deleteSnapshot(snapshotId);
+        setSnapshots(await listSnapshots());
+      } catch (error) {
+        setSnapshotMessage(
+          error instanceof LocalStorageError && error.code === 'quota'
+            ? t.snapshots.quota
+            : t.snapshots.error,
+        );
+      }
     },
-    [t.snapshots.deleteConfirm],
+    [t.snapshots.deleteConfirm, t.snapshots.error, t.snapshots.quota],
   );
 
   const handleExportLog = useCallback(async () => {
@@ -784,7 +798,17 @@ export function App() {
                     · {formatFrequency(snapshot.metrics.dominantFrequencyHz)}
                   </p>
                   {snapshot.audioClip ? (
-                    <small>{t.snapshots.audioClipSaved}</small>
+                    <>
+                      <small>{t.snapshots.audioClipSaved}</small>
+                      <SnapshotAudioPlayer
+                        audioClip={snapshot.audioClip}
+                        clipEndLabel={t.snapshots.clipEnd}
+                        clipStartLabel={t.snapshots.clipStart}
+                        pauseLabel={t.snapshots.pauseClip}
+                        playLabel={t.snapshots.playClip}
+                        selectionLabel={t.snapshots.clipSelection}
+                      />
+                    </>
                   ) : (
                     <small>{t.snapshots.audioClipUnavailable}</small>
                   )}
