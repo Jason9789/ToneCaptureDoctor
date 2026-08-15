@@ -3,7 +3,9 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import {
   compareSnapshots,
   type AudioMetrics,
+  summarizeDryWetLatency,
   type SnapshotComparison,
+  type DryWetLatencySummary,
 } from '@tone-capture-doctor/audio-core';
 import { evaluateDiagnosticRules } from '@tone-capture-doctor/analysis-rules';
 
@@ -35,7 +37,9 @@ import { SignalVisualizer } from './SignalVisualizer';
 import { SnapshotAudioPlayer } from './SnapshotAudioPlayer';
 import { GlossaryPanel } from './GlossaryPanel';
 import { DryWetDoctorPanel } from './DryWetDoctorPanel';
+import { exportTonecheck, importTonecheck } from './tonecheck';
 import {
+  clearAllLocalData,
   createSessionId,
   deleteSnapshot,
   exportTestLog,
@@ -119,6 +123,10 @@ export function App() {
   const [dryWetDryChannelIndex, setDryWetDryChannelIndex] = useState(0);
   const [dryWetWetChannelIndex, setDryWetWetChannelIndex] = useState(1);
   const [dryWetResult, setDryWetResult] = useState<DryWetAnalysisResult | null>(null);
+  const [dryWetDroppedQuantumCount, setDryWetDroppedQuantumCount] = useState(0);
+  const [dryWetLatencySummary, setDryWetLatencySummary] = useState<DryWetLatencySummary | null>(
+    null,
+  );
   const [dryWetStatus, setDryWetStatus] = useState<'starting' | 'active' | 'unavailable'>(
     'unavailable',
   );
@@ -133,6 +141,7 @@ export function App() {
   const streamRef = useRef<MediaStream | null>(null);
   const analysisRef = useRef<AudioAnalysisSession | null>(null);
   const dryWetAnalysisRef = useRef<DryWetAnalysisSession | null>(null);
+  const dryWetHistoryRef = useRef<DryWetAnalysisResult[]>([]);
   const logWriterRef = useRef<TestLogWriter | null>(null);
   const logWriterStartRef = useRef<Promise<void> | null>(null);
   const clipCaptureRef = useRef<AudioClipCapture | null>(null);
@@ -183,6 +192,13 @@ export function App() {
     setStatus(nextStatus);
   }, []);
 
+  const resetDryWetState = useCallback(() => {
+    dryWetHistoryRef.current = [];
+    setDryWetDroppedQuantumCount(0);
+    setDryWetLatencySummary(null);
+    setDryWetResult(null);
+  }, []);
+
   const replaceSession = useCallback(
     (nextSession: AudioInputSession) => {
       if (streamRef.current && streamRef.current !== nextSession.stream) {
@@ -197,14 +213,14 @@ export function App() {
       setMetrics(null);
       setAnalysisStatus('starting');
       setConnectionNotice(null);
-      setDryWetResult(null);
+      resetDryWetState();
       setDryWetStatus((nextSession.settings.channelCount ?? 0) >= 2 ? 'starting' : 'unavailable');
       const nextDeviceId = nextSession.selectedDeviceId ?? '';
       selectedDeviceRef.current = nextDeviceId;
       setSelectedDeviceId(nextDeviceId);
       updateStatus('connected');
     },
-    [updateStatus],
+    [resetDryWetState, updateStatus],
   );
 
   const connect = useCallback(
@@ -252,12 +268,12 @@ export function App() {
     setMetrics(null);
     setAnalysisStatus('unavailable');
     setConnectionNotice(null);
-    setDryWetResult(null);
+    resetDryWetState();
     setDryWetStatus('unavailable');
     selectedDeviceRef.current = '';
     setSelectedDeviceId('');
     updateStatus('stopped');
-  }, [updateStatus]);
+  }, [resetDryWetState, updateStatus]);
 
   useEffect(() => {
     return () => {
@@ -276,20 +292,25 @@ export function App() {
     let cancelled = false;
     const sessionId = pendingLogSessionIdRef.current ?? createSessionId();
     pendingLogSessionIdRef.current = null;
-    const writer = new TestLogWriter({
-      appVersion: '0.0.0',
-      locale: localeRef.current,
-      sessionId,
-      startedAt: new Date().toISOString(),
-      trackSettings: {
-        autoGainControl: session.settings.autoGainControl,
-        channelCount: session.settings.channelCount,
-        deviceId: session.settings.deviceId,
-        echoCancellation: session.settings.echoCancellation,
-        noiseSuppression: session.settings.noiseSuppression,
-        sampleRate: session.settings.sampleRate,
+    const writer = new TestLogWriter(
+      {
+        appVersion: '0.0.0',
+        locale: localeRef.current,
+        sessionId,
+        startedAt: new Date().toISOString(),
+        trackSettings: {
+          autoGainControl: session.settings.autoGainControl,
+          channelCount: session.settings.channelCount,
+          deviceId: session.settings.deviceId,
+          echoCancellation: session.settings.echoCancellation,
+          noiseSuppression: session.settings.noiseSuppression,
+          sampleRate: session.settings.sampleRate,
+        },
       },
-    });
+      {
+        onError: () => setNotice({ area: 'snapshots', key: 'error' }),
+      },
+    );
     logWriterRef.current = writer;
     clipCaptureRef.current = startAudioClipCapture(session.stream);
     const startPromise = writer.start().catch(() => setNotice({ area: 'snapshots', key: 'error' }));
@@ -354,10 +375,23 @@ export function App() {
         if (!cancelled) {
           setDryWetResult(result);
           setDryWetStatus('active');
+          dryWetHistoryRef.current = [...dryWetHistoryRef.current, result].slice(-8);
+          setDryWetLatencySummary(summarizeDryWetLatency(dryWetHistoryRef.current));
+          logWriterRef.current?.appendDryWetResult(result);
         }
       },
       {
         dryChannelIndex: dryWetDryChannelIndex,
+        onError: () => {
+          if (!cancelled) {
+            setDryWetStatus('unavailable');
+          }
+        },
+        onStatus: (nextStatus) => {
+          if (!cancelled) {
+            setDryWetDroppedQuantumCount(nextStatus.droppedQuantumCount);
+          }
+        },
         sampleRate: session.settings.sampleRate,
         wetChannelIndex: dryWetWetChannelIndex,
       },
@@ -435,7 +469,7 @@ export function App() {
             setMetrics(null);
             setAnalysisStatus('unavailable');
             setConnectionNotice(null);
-            setDryWetResult(null);
+            resetDryWetState();
             setDryWetStatus('unavailable');
             selectedDeviceRef.current = '';
             setSelectedDeviceId('');
@@ -447,7 +481,7 @@ export function App() {
 
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
     return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-  }, [session, updateStatus]);
+  }, [resetDryWetState, session, updateStatus]);
 
   const handleDeviceChange = (deviceId: string) => {
     void connect(deviceId);
@@ -457,7 +491,7 @@ export function App() {
     if (index === dryWetWetChannelIndex) {
       setDryWetWetChannelIndex(dryWetDryChannelIndex);
     }
-    setDryWetResult(null);
+    resetDryWetState();
     setDryWetStatus('starting');
     setDryWetDryChannelIndex(index);
   };
@@ -466,7 +500,7 @@ export function App() {
     if (index === dryWetDryChannelIndex) {
       setDryWetDryChannelIndex(dryWetWetChannelIndex);
     }
-    setDryWetResult(null);
+    resetDryWetState();
     setDryWetStatus('starting');
     setDryWetWetChannelIndex(index);
   };
@@ -574,6 +608,22 @@ export function App() {
     [candidateSnapshotId, referenceSnapshotId, refreshSnapshots, t.snapshots.deleteConfirm],
   );
 
+  const handleDeleteAllLocalData = useCallback(async () => {
+    if (session || !window.confirm(t.snapshots.deleteAllConfirm)) {
+      return;
+    }
+    try {
+      await clearAllLocalData();
+      setSnapshots([]);
+      setComparison(null);
+      setReferenceSnapshotId('');
+      setCandidateSnapshotId('');
+      setNotice({ area: 'snapshots', key: 'deletedAll' });
+    } catch {
+      setNotice({ area: 'snapshots', key: 'error' });
+    }
+  }, [session, t.snapshots.deleteAllConfirm]);
+
   const handleExportLog = useCallback(async () => {
     if (!logSessionId) {
       setNotice({ area: 'snapshots', key: 'empty' });
@@ -581,6 +631,7 @@ export function App() {
     }
     try {
       await logWriterStartRef.current;
+      await logWriterRef.current?.flushPending();
       const log = await exportTestLog(logSessionId);
       const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
@@ -609,6 +660,23 @@ export function App() {
     }
   }, []);
 
+  const handleExportTonecheck = useCallback(async () => {
+    try {
+      await logWriterStartRef.current;
+      await logWriterRef.current?.flushPending();
+      const archive = await exportTonecheck();
+      const url = URL.createObjectURL(archive.blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'tone-capture-doctor-session.tonecheck';
+      anchor.click();
+      URL.revokeObjectURL(url);
+      setNotice({ area: 'snapshots', key: 'tonecheckExported' });
+    } catch {
+      setNotice({ area: 'snapshots', key: 'error' });
+    }
+  }, []);
+
   const handleImportSnapshots = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.currentTarget.files?.[0];
@@ -622,6 +690,24 @@ export function App() {
         setNotice({ area: 'snapshots', key: 'imported' });
       } catch {
         setNotice({ area: 'snapshots', key: 'invalidImport' });
+      }
+    },
+    [refreshSnapshots],
+  );
+
+  const handleImportTonecheck = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0];
+      event.currentTarget.value = '';
+      if (!file) {
+        return;
+      }
+      try {
+        await importTonecheck(file);
+        await refreshSnapshots();
+        setNotice({ area: 'snapshots', key: 'tonecheckImported' });
+      } catch {
+        setNotice({ area: 'snapshots', key: 'tonecheckInvalid' });
       }
     },
     [refreshSnapshots],
@@ -970,6 +1056,8 @@ export function App() {
           onDryChannelChange={handleDryChannelChange}
           onWetChannelChange={handleWetChannelChange}
           result={dryWetResult}
+          droppedQuantumCount={dryWetDroppedQuantumCount}
+          latencySummary={dryWetLatencySummary}
           status={dryWetStatus}
           wetChannelIndex={dryWetWetChannelIndex}
         />
@@ -1038,6 +1126,21 @@ export function App() {
               >
                 {t.snapshots.exportSnapshots}
               </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void handleExportTonecheck()}
+              >
+                {t.snapshots.exportTonecheck}
+              </button>
+              <button
+                className="secondary-button"
+                disabled={hasSession}
+                onClick={() => void handleDeleteAllLocalData()}
+                type="button"
+              >
+                {t.snapshots.deleteAll}
+              </button>
               <label className="secondary-button file-button" htmlFor="snapshot-import">
                 {t.snapshots.importSnapshots}
                 <input
@@ -1045,6 +1148,15 @@ export function App() {
                   type="file"
                   accept="application/json,.json"
                   onChange={handleImportSnapshots}
+                />
+              </label>
+              <label className="secondary-button file-button" htmlFor="tonecheck-import">
+                {t.snapshots.importTonecheck}
+                <input
+                  id="tonecheck-import"
+                  type="file"
+                  accept="application/zip,.tonecheck"
+                  onChange={handleImportTonecheck}
                 />
               </label>
             </div>

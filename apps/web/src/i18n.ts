@@ -49,12 +49,17 @@ export interface Messages {
     audioClipSaved: string;
     audioClipUnavailable: string;
     delete: string;
+    deleteAll: string;
+    deleteAllConfirm: string;
+    deletedAll: string;
     deleteConfirm: string;
     empty: string;
     error: string;
     exportLog: string;
     exportSnapshots: string;
+    exportTonecheck: string;
     importSnapshots: string;
+    importTonecheck: string;
     imported: string;
     invalidImport: string;
     quota: string;
@@ -69,6 +74,9 @@ export interface Messages {
     save: string;
     saved: string;
     title: string;
+    tonecheckExported: string;
+    tonecheckImported: string;
+    tonecheckInvalid: string;
     eyebrow: string;
   };
   visualizer: {
@@ -152,6 +160,7 @@ export interface Messages {
     dry: string;
     dryInput: string;
     dynamics: string;
+    droppedQuanta: string;
     eyebrow: string;
     gainDifference: string;
     input: string;
@@ -163,9 +172,14 @@ export interface Messages {
     modeMonoLike: string;
     modeNoSignal: string;
     modeStereoDistinct: string;
+    levelMatchedDelta: string;
     needsTwoChannels: string;
     peakDifference: string;
     rms: string;
+    repeatability: string;
+    repeatabilityHigh: string;
+    repeatabilityLow: string;
+    repeatabilityMedium: string;
     safetyDescription: string;
     safetyTitle: string;
     spectrum: string;
@@ -256,12 +270,17 @@ export const MESSAGES: Record<Locale, Messages> = {
       audioClipSaved: 'A short local audio clip is attached to this snapshot.',
       audioClipUnavailable: 'Audio clip capture is unavailable in this browser.',
       delete: 'Delete',
+      deleteAll: 'Delete all local data',
+      deleteAllConfirm: 'Delete all local snapshots and test logs from this browser?',
+      deletedAll: 'All local snapshots and test logs were deleted.',
       deleteConfirm: 'Delete this local snapshot?',
       empty: 'Save a snapshot during a live test to compare metrics later.',
       error: 'The snapshot could not be saved. Check local browser storage and try again.',
       exportLog: 'Export test log',
       exportSnapshots: 'Export snapshots',
+      exportTonecheck: 'Export .tonecheck',
       importSnapshots: 'Import snapshots',
+      importTonecheck: 'Import .tonecheck',
       imported: 'Snapshots imported locally.',
       invalidImport: 'The snapshot file could not be imported.',
       quota: 'Local storage is full. Export your snapshots and remove older data before retrying.',
@@ -276,6 +295,9 @@ export const MESSAGES: Record<Locale, Messages> = {
       save: 'Save snapshot',
       saved: 'Snapshot saved locally.',
       title: 'Test snapshots',
+      tonecheckExported: '.tonecheck session archive exported locally.',
+      tonecheckImported: '.tonecheck session archive imported locally.',
+      tonecheckInvalid: 'The .tonecheck archive could not be imported.',
       eyebrow: 'Local evidence',
     },
     visualizer: {
@@ -367,12 +389,14 @@ export const MESSAGES: Record<Locale, Messages> = {
       dry: 'Dry',
       dryInput: 'Dry input',
       dynamics: 'Dynamics',
+      droppedQuanta: 'Dropped input quanta',
       eyebrow: 'Two-channel evidence',
       gainDifference: 'RMS gain difference',
       input: 'Input',
       latency: 'Latency candidate',
       latencyEstimated: 'estimated',
       latencyMeasured: 'measured',
+      levelMatchedDelta: 'Level-matched residual',
       mode: 'Channel state',
       modeIndeterminate: 'Not enough signal',
       modeMonoLike: 'Mono-like',
@@ -382,6 +406,10 @@ export const MESSAGES: Record<Locale, Messages> = {
         'The browser reported fewer than two input channels. Use a two-channel interface or continue with Signal Health.',
       peakDifference: 'Peak difference',
       rms: 'RMS',
+      repeatability: 'Repeated latency',
+      repeatabilityHigh: 'stable',
+      repeatabilityLow: 'unstable',
+      repeatabilityMedium: 'usable but variable',
       safetyDescription:
         'Use line/instrument inputs or a manufacturer-approved load box. Never connect an amplifier speaker output directly to an interface input.',
       safetyTitle: 'Safe routing:',
@@ -522,12 +550,17 @@ export const MESSAGES: Record<Locale, Messages> = {
       audioClipSaved: '짧은 로컬 오디오 클립이 이 스냅샷에 첨부되었습니다.',
       audioClipUnavailable: '이 브라우저에서는 오디오 클립 캡처를 사용할 수 없습니다.',
       delete: '삭제',
+      deleteAll: '로컬 데이터 전체 삭제',
+      deleteAllConfirm: '이 브라우저의 모든 로컬 스냅샷과 테스트 로그를 삭제할까요?',
+      deletedAll: '모든 로컬 스냅샷과 테스트 로그를 삭제했습니다.',
       deleteConfirm: '이 로컬 스냅샷을 삭제할까요?',
       empty: '실시간 테스트 중 스냅샷을 저장하면 나중에 지표를 비교할 수 있습니다.',
       error: '스냅샷을 저장하지 못했습니다. 브라우저 로컬 저장소를 확인하고 다시 시도하세요.',
       exportLog: '테스트 로그 내보내기',
       exportSnapshots: '스냅샷 내보내기',
+      exportTonecheck: '.tonecheck 내보내기',
       importSnapshots: '스냅샷 가져오기',
+      importTonecheck: '.tonecheck 가져오기',
       imported: '스냅샷을 로컬로 가져왔습니다.',
       invalidImport: '스냅샷 파일을 가져오지 못했습니다.',
       quota:
@@ -543,6 +576,9 @@ export const MESSAGES: Record<Locale, Messages> = {
       save: '스냅샷 저장',
       saved: '스냅샷을 로컬에 저장했습니다.',
       title: '테스트 스냅샷',
+      tonecheckExported: '.tonecheck 세션 archive를 로컬로 내보냈습니다.',
+      tonecheckImported: '.tonecheck 세션 archive를 로컬로 가져왔습니다.',
+      tonecheckInvalid: '.tonecheck archive를 가져오지 못했습니다.',
       eyebrow: '로컬 증거',
     },
     visualizer: {
@@ -632,12 +668,14 @@ export const MESSAGES: Record<Locale, Messages> = {
       dry: 'Dry',
       dryInput: 'Dry 입력',
       dynamics: '다이내믹',
+      droppedQuanta: '누락된 입력 퀀타',
       eyebrow: '두 채널 근거',
       gainDifference: 'RMS 게인 차이',
       input: '입력',
       latency: '지연 후보',
       latencyEstimated: '추정값',
       latencyMeasured: '측정값',
+      levelMatchedDelta: '레벨 보정 잔차',
       mode: '채널 상태',
       modeIndeterminate: '신호 부족',
       modeMonoLike: '모노 유사',
@@ -647,6 +685,10 @@ export const MESSAGES: Record<Locale, Messages> = {
         '브라우저가 두 개 미만의 입력 채널을 보고했습니다. 2채널 인터페이스를 사용하거나 Signal Health를 계속 사용하세요.',
       peakDifference: 'Peak 차이',
       rms: 'RMS',
+      repeatability: '반복 지연',
+      repeatabilityHigh: '안정적',
+      repeatabilityLow: '불안정',
+      repeatabilityMedium: '사용 가능하지만 변동 있음',
       safetyDescription:
         'line/instrument 입력 또는 제조사가 승인한 load box를 사용하세요. 앰프 speaker output을 인터페이스 입력에 직접 연결하지 마세요.',
       safetyTitle: '안전한 라우팅:',

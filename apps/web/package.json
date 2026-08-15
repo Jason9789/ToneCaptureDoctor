@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:pwa": "playwright test --config=playwright.pwa.config.ts"
   },
   "dependencies": {
     "@tone-capture-doctor/analysis-rules": "0.0.0",

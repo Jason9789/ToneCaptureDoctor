@@ -1,6 +1,6 @@
 import { analyzeAudioFrame, type FrequencyBandPower } from './index';
 
-export const DRY_WET_ALGORITHM_VERSION = '0.1.0';
+export const DRY_WET_ALGORITHM_VERSION = '0.2.0';
 export const DEFAULT_DRY_WET_NO_SIGNAL_THRESHOLD_DBFS = -60;
 export const DEFAULT_DRY_WET_MAX_LAG_MS = 100;
 export const DEFAULT_DRY_WET_MINIMUM_CORRELATION = 0.35;
@@ -8,6 +8,7 @@ export const DEFAULT_DRY_WET_STRONG_CORRELATION = 0.9;
 
 export type DryWetConfidence = 'high' | 'low' | 'medium' | 'unavailable';
 export type DryWetChannelMode = 'indeterminate' | 'mono-like' | 'no-signal' | 'stereo-distinct';
+export type DryWetCorrelationMethod = 'gcc-phat' | 'normalized';
 export type DryWetWarningCode =
   | 'both-no-signal'
   | 'dry-no-signal'
@@ -29,6 +30,7 @@ export interface DryWetAnalysisInput {
 }
 
 export interface DryWetAnalysisOptions {
+  correlationMethod?: DryWetCorrelationMethod;
   maxLagSamples?: number;
   minimumCorrelation?: number;
   noSignalThresholdDbfs?: number;
@@ -54,6 +56,7 @@ export interface DryWetSpectrumDifference {
   id: FrequencyBandPower['id'];
   maximumHz: number;
   minimumHz: number;
+  levelMatchedDeltaDb: number | null;
   dryLevelDbfs: number;
   wetLevelDbfs: number;
 }
@@ -64,6 +67,14 @@ export interface DryWetLatencyCandidate {
   milliseconds: number | null;
   quality: 'estimated' | 'measured' | 'unavailable';
   sampleOffset: number | null;
+}
+
+export interface DryWetLatencySummary {
+  madSamples: number | null;
+  medianMilliseconds: number | null;
+  medianSampleOffset: number | null;
+  repeatCount: number;
+  stability: 'high' | 'low' | 'medium' | 'unavailable';
 }
 
 export interface DryWetChannelSwapAssessment {
@@ -90,6 +101,7 @@ export interface DryWetAnalysisResult {
   algorithmVersion: string;
   channelMode: DryWetChannelModeAssessment;
   channelSwap: DryWetChannelSwapAssessment;
+  correlationMethod: DryWetCorrelationMethod;
   dry: DryWetSignalMetrics;
   frameEndSample: number;
   frameSampleCount: number;
@@ -114,6 +126,7 @@ interface CorrelationResult {
 }
 
 interface NormalizedOptions {
+  correlationMethod: DryWetCorrelationMethod;
   maxLagSamples: number;
   minimumCorrelation: number;
   noSignalThresholdDbfs: number;
@@ -176,6 +189,11 @@ function normalizeOptions(
   const noSignalThresholdDbfs =
     options.noSignalThresholdDbfs ?? DEFAULT_DRY_WET_NO_SIGNAL_THRESHOLD_DBFS;
   const strongCorrelation = options.strongCorrelation ?? DEFAULT_DRY_WET_STRONG_CORRELATION;
+  const correlationMethod = options.correlationMethod ?? 'normalized';
+
+  if (correlationMethod !== 'normalized' && correlationMethod !== 'gcc-phat') {
+    throw new RangeError('correlationMethod must be normalized or gcc-phat.');
+  }
 
   if (!Number.isSafeInteger(maxLagSamples) || maxLagSamples < 0) {
     throw new RangeError('maxLagSamples must be a non-negative integer.');
@@ -194,6 +212,7 @@ function normalizeOptions(
   }
 
   return {
+    correlationMethod,
     maxLagSamples: Math.min(
       maxLagSamples,
       Math.max(0, frameSampleCount - MINIMUM_CORRELATION_OVERLAP),
@@ -268,6 +287,10 @@ function calculateSpectrumDifference(
     peakDbfs: wetRms.peakDbfs,
     rmsDbfs: wetRms.rmsDbfs,
   };
+  const levelOffsetDb =
+    Number.isFinite(dryRms.rmsDbfs) && Number.isFinite(wetRms.rmsDbfs)
+      ? wetRms.rmsDbfs - dryRms.rmsDbfs
+      : null;
   const fftSize = getSpectrumFftSize(drySamples.length);
   if (!fftSize) {
     return { difference: [], dryDynamics, wetDynamics };
@@ -294,6 +317,10 @@ function calculateSpectrumDifference(
       id: dryBand.id,
       maximumHz: dryBand.maximumHz,
       minimumHz: dryBand.minimumHz,
+      levelMatchedDeltaDb:
+        levelOffsetDb !== null && Number.isFinite(dryLevelDbfs) && Number.isFinite(wetLevelDbfs)
+          ? wetLevelDbfs - dryLevelDbfs - levelOffsetDb
+          : null,
       wetLevelDbfs,
     } satisfies DryWetSpectrumDifference;
   });
@@ -341,7 +368,15 @@ function findBestCorrelation(
   dry: ArrayLike<number>,
   wet: ArrayLike<number>,
   maxLagSamples: number,
+  method: DryWetCorrelationMethod,
 ): CorrelationResult {
+  if (method === 'gcc-phat') {
+    const lagSamples = findGccPhatLag(dry, wet, maxLagSamples);
+    return {
+      correlation: normalizedCorrelation(dry, wet, lagSamples),
+      lagSamples,
+    };
+  }
   let best: CorrelationResult = { correlation: 0, lagSamples: 0 };
   let bestMagnitude = -1;
   for (let lagSamples = -maxLagSamples; lagSamples <= maxLagSamples; lagSamples += 1) {
@@ -357,6 +392,121 @@ function findBestCorrelation(
     }
   }
   return bestMagnitude >= 0 ? best : { correlation: 0, lagSamples: 0 };
+}
+
+function nextPowerOfTwo(value: number): number {
+  let result = 1;
+  while (result < value) {
+    result *= 2;
+  }
+  return result;
+}
+
+function fft(real: Float64Array, imaginary: Float64Array, inverse: boolean): void {
+  for (let index = 1, reversed = 0; index < real.length; index += 1) {
+    let bit = real.length >> 1;
+    for (; reversed & bit; bit >>= 1) {
+      reversed ^= bit;
+    }
+    reversed ^= bit;
+    if (index < reversed) {
+      [real[index], real[reversed]] = [real[reversed] ?? 0, real[index] ?? 0];
+      [imaginary[index], imaginary[reversed]] = [imaginary[reversed] ?? 0, imaginary[index] ?? 0];
+    }
+  }
+  for (let length = 2; length <= real.length; length *= 2) {
+    const angle = ((inverse ? 2 : -2) * Math.PI) / length;
+    const phaseReal = Math.cos(angle);
+    const phaseImaginary = Math.sin(angle);
+    for (let start = 0; start < real.length; start += length) {
+      let currentReal = 1;
+      let currentImaginary = 0;
+      const half = length / 2;
+      for (let offset = 0; offset < half; offset += 1) {
+        const evenIndex = start + offset;
+        const oddIndex = evenIndex + half;
+        const oddReal =
+          (real[oddIndex] ?? 0) * currentReal - (imaginary[oddIndex] ?? 0) * currentImaginary;
+        const oddImaginary =
+          (real[oddIndex] ?? 0) * currentImaginary + (imaginary[oddIndex] ?? 0) * currentReal;
+        const evenReal = real[evenIndex] ?? 0;
+        const evenImaginary = imaginary[evenIndex] ?? 0;
+        real[evenIndex] = evenReal + oddReal;
+        imaginary[evenIndex] = evenImaginary + oddImaginary;
+        real[oddIndex] = evenReal - oddReal;
+        imaginary[oddIndex] = evenImaginary - oddImaginary;
+        const nextReal = currentReal * phaseReal - currentImaginary * phaseImaginary;
+        currentImaginary = currentReal * phaseImaginary + currentImaginary * phaseReal;
+        currentReal = nextReal;
+      }
+    }
+  }
+  if (inverse) {
+    for (let index = 0; index < real.length; index += 1) {
+      real[index] = (real[index] ?? 0) / real.length;
+      imaginary[index] = (imaginary[index] ?? 0) / real.length;
+    }
+  }
+}
+
+function findGccPhatLag(
+  dry: ArrayLike<number>,
+  wet: ArrayLike<number>,
+  maxLagSamples: number,
+): number {
+  const fftSize = nextPowerOfTwo(dry.length + wet.length - 1);
+  const dryReal = new Float64Array(fftSize);
+  const wetReal = new Float64Array(fftSize);
+  const dryImaginary = new Float64Array(fftSize);
+  const wetImaginary = new Float64Array(fftSize);
+  let dryMean = 0;
+  let wetMean = 0;
+  for (let index = 0; index < dry.length; index += 1) {
+    dryMean += dry[index] ?? 0;
+    wetMean += wet[index] ?? 0;
+  }
+  dryMean /= dry.length;
+  wetMean /= wet.length;
+  for (let index = 0; index < dry.length; index += 1) {
+    dryReal[index] = (dry[index] ?? 0) - dryMean;
+    wetReal[index] = (wet[index] ?? 0) - wetMean;
+  }
+  fft(dryReal, dryImaginary, false);
+  fft(wetReal, wetImaginary, false);
+  const crossReal = new Float64Array(fftSize);
+  const crossImaginary = new Float64Array(fftSize);
+  for (let index = 0; index < fftSize; index += 1) {
+    const dryFrequencyReal = dryReal[index] ?? 0;
+    const dryFrequencyImaginary = dryImaginary[index] ?? 0;
+    const wetFrequencyReal = wetReal[index] ?? 0;
+    const wetFrequencyImaginary = wetImaginary[index] ?? 0;
+    const magnitude =
+      Math.hypot(dryFrequencyReal, dryFrequencyImaginary) *
+      Math.hypot(wetFrequencyReal, wetFrequencyImaginary);
+    if (magnitude > EPSILON) {
+      crossReal[index] =
+        (dryFrequencyReal * wetFrequencyReal + dryFrequencyImaginary * wetFrequencyImaginary) /
+        magnitude;
+      crossImaginary[index] =
+        (dryFrequencyReal * wetFrequencyImaginary - dryFrequencyImaginary * wetFrequencyReal) /
+        magnitude;
+    }
+  }
+  fft(crossReal, crossImaginary, true);
+  let bestLag = 0;
+  let bestMagnitude = -1;
+  for (let lag = -maxLagSamples; lag <= maxLagSamples; lag += 1) {
+    const index = (lag + fftSize) % fftSize;
+    const magnitude = Math.hypot(crossReal[index] ?? 0, crossImaginary[index] ?? 0);
+    if (
+      magnitude > bestMagnitude + EPSILON ||
+      (Math.abs(magnitude - bestMagnitude) <= EPSILON && Math.abs(lag) < Math.abs(bestLag))
+    ) {
+      bestLag = lag;
+      bestMagnitude = magnitude;
+    }
+  }
+  return bestLag;
 }
 
 function confidenceForCorrelation(
@@ -407,7 +557,12 @@ export function analyzeDryWet(
   );
 
   const correlation = bothHaveSignal
-    ? findBestCorrelation(input.dry.samples, input.wet.samples, normalizedOptions.maxLagSamples)
+    ? findBestCorrelation(
+        input.dry.samples,
+        input.wet.samples,
+        normalizedOptions.maxLagSamples,
+        normalizedOptions.correlationMethod,
+      )
     : null;
   const correlationMagnitude = correlation === null ? 0 : Math.abs(correlation.correlation);
   const latencyConfidence = confidenceForCorrelation(correlationMagnitude, normalizedOptions);
@@ -495,6 +650,7 @@ export function analyzeDryWet(
     algorithmVersion: DRY_WET_ALGORITHM_VERSION,
     channelMode,
     channelSwap,
+    correlationMethod: normalizedOptions.correlationMethod,
     dry,
     frameEndSample: input.dry.frameStartSample + drySampleCount,
     frameSampleCount: drySampleCount,
@@ -511,5 +667,45 @@ export function analyzeDryWet(
     spectrumDifference: spectrum.difference,
     warnings,
     wet,
+  };
+}
+
+function median(values: number[]): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 === 0
+    ? ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2
+    : (sorted[middle] ?? 0);
+}
+
+export function summarizeDryWetLatency(results: DryWetAnalysisResult[]): DryWetLatencySummary {
+  const candidates = results
+    .map((result) => result.latency.sampleOffset)
+    .filter((offset): offset is number => offset !== null && Number.isFinite(offset));
+  if (candidates.length === 0) {
+    return {
+      madSamples: null,
+      medianMilliseconds: null,
+      medianSampleOffset: null,
+      repeatCount: 0,
+      stability: 'unavailable',
+    };
+  }
+  const medianSampleOffset = median(candidates);
+  const madSamples = median(candidates.map((offset) => Math.abs(offset - medianSampleOffset)));
+  const sampleRate =
+    results.find((result) => result.latency.sampleOffset !== null)?.sampleRate ?? 0;
+  const stability =
+    candidates.length >= 3 && madSamples <= 1
+      ? 'high'
+      : candidates.length >= 2 && madSamples <= 4
+        ? 'medium'
+        : 'low';
+  return {
+    madSamples,
+    medianMilliseconds: sampleRate > 0 ? (medianSampleOffset / sampleRate) * 1_000 : null,
+    medianSampleOffset,
+    repeatCount: candidates.length,
+    stability,
   };
 }

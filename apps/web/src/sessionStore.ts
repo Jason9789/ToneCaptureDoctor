@@ -1,4 +1,4 @@
-import type { AudioMetrics } from '@tone-capture-doctor/audio-core';
+import type { AudioMetrics, DryWetAnalysisResult } from '@tone-capture-doctor/audio-core';
 
 export const SNAPSHOT_SCHEMA_VERSION = 2;
 export const TEST_LOG_SCHEMA_VERSION = 1;
@@ -44,6 +44,7 @@ export interface SnapshotRecord {
   sessionId: string;
   spectrum: number[];
   /** Missing only on legacy schema-v1 snapshots, which cannot be compared safely. */
+  comparisonStatus?: 'comparable' | 'legacy-uncomparable';
   spectrumUnit?: 'power-per-bin';
   startSample: number;
   waveform: number[];
@@ -75,6 +76,22 @@ export interface TestLogExport {
   session: TestLogSession;
 }
 
+export async function listTestLogSessions(): Promise<TestLogSession[]> {
+  if (!hasIndexedDb()) {
+    return [...memorySessions.values()].sort((left, right) =>
+      right.startedAt.localeCompare(left.startedAt),
+    );
+  }
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(TEST_SESSION_STORE, 'readonly');
+    const sessions = await requestResult(transaction.objectStore(TEST_SESSION_STORE).getAll());
+    return sessions.sort((left, right) => right.startedAt.localeCompare(left.startedAt));
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
+}
+
 export interface SnapshotExportBundle {
   exportedAt: string;
   schemaVersion: number;
@@ -87,7 +104,7 @@ export interface SnapshotExportBundle {
 }
 
 const DATABASE_NAME = 'tone-capture-doctor-local';
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const SNAPSHOT_STORE = 'snapshots';
 const TEST_EVENT_STORE = 'test-events';
 const TEST_SESSION_STORE = 'test-sessions';
@@ -112,8 +129,15 @@ function openDatabase(): Promise<IDBDatabase> {
   databasePromise = new Promise((resolve, reject) => {
     const request = indexedDB.open(DATABASE_NAME, DATABASE_VERSION);
     request.onerror = () => reject(request.error ?? new Error('Could not open local storage.'));
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = () => {
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => {
+        database.close();
+        databasePromise = undefined;
+      };
+      resolve(database);
+    };
+    request.onupgradeneeded = (event) => {
       const database = request.result;
       if (!database.objectStoreNames.contains(SNAPSHOT_STORE)) {
         database.createObjectStore(SNAPSHOT_STORE, { keyPath: 'id' });
@@ -125,7 +149,28 @@ function openDatabase(): Promise<IDBDatabase> {
         const events = database.createObjectStore(TEST_EVENT_STORE, { keyPath: 'eventId' });
         events.createIndex('sessionId', 'sessionId', { unique: false });
       }
+      if (event.oldVersion < 2 && database.objectStoreNames.contains(SNAPSHOT_STORE)) {
+        const snapshots = request.transaction?.objectStore(SNAPSHOT_STORE);
+        if (snapshots) {
+          const cursorRequest = snapshots.openCursor();
+          cursorRequest.onsuccess = (cursorEvent) => {
+            const cursor = (cursorEvent.target as IDBRequest<IDBCursorWithValue>).result;
+            if (!cursor) {
+              return;
+            }
+            const value = cursor.value as Partial<SnapshotRecord>;
+            if (value.schemaVersion === 1 && !value.comparisonStatus) {
+              cursor.update({ ...value, comparisonStatus: 'legacy-uncomparable' });
+            }
+            cursor.continue();
+          };
+        }
+      }
     };
+  });
+
+  void databasePromise.catch(() => {
+    databasePromise = undefined;
   });
 
   return databasePromise;
@@ -199,21 +244,106 @@ export async function saveSnapshot(snapshot: SnapshotRecord): Promise<void> {
   }
 }
 
+export async function saveSnapshotsAtomically(snapshots: SnapshotRecord[]): Promise<void> {
+  await saveSnapshotsAndLogsAtomically(snapshots, []);
+}
+
+export async function saveSnapshotsAndLogsAtomically(
+  snapshots: SnapshotRecord[],
+  logs: TestLogExport[],
+): Promise<void> {
+  if (snapshots.length === 0) {
+    if (logs.length === 0) {
+      return;
+    }
+  }
+  if (!hasIndexedDb()) {
+    for (const snapshot of snapshots) {
+      memorySnapshots.set(snapshot.id, snapshot);
+    }
+    for (const log of logs) {
+      memorySessions.set(log.session.sessionId, log.session);
+      const eventIds = new Set(log.events.map((event) => event.eventId));
+      for (let index = memoryEvents.length - 1; index >= 0; index -= 1) {
+        if (eventIds.has(memoryEvents[index]?.eventId ?? '')) {
+          memoryEvents.splice(index, 1);
+        }
+      }
+      memoryEvents.push(...log.events);
+    }
+    return;
+  }
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(
+      [SNAPSHOT_STORE, TEST_SESSION_STORE, TEST_EVENT_STORE],
+      'readwrite',
+    );
+    const snapshotStore = transaction.objectStore(SNAPSHOT_STORE);
+    for (const snapshot of snapshots) {
+      snapshotStore.put(snapshot);
+    }
+    const sessionStore = transaction.objectStore(TEST_SESSION_STORE);
+    const eventStore = transaction.objectStore(TEST_EVENT_STORE);
+    for (const log of logs) {
+      sessionStore.put(log.session);
+      for (const event of log.events) {
+        eventStore.put(event);
+      }
+    }
+    await transactionComplete(transaction);
+    for (const snapshot of snapshots) {
+      memorySnapshots.set(snapshot.id, snapshot);
+    }
+    for (const log of logs) {
+      memorySessions.set(log.session.sessionId, log.session);
+      const eventIds = new Set(log.events.map((event) => event.eventId));
+      for (let index = memoryEvents.length - 1; index >= 0; index -= 1) {
+        if (eventIds.has(memoryEvents[index]?.eventId ?? '')) {
+          memoryEvents.splice(index, 1);
+        }
+      }
+      memoryEvents.push(...log.events);
+    }
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
+}
+
+function normalizeStoredSnapshot(value: unknown): SnapshotRecord | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+  const { audioClip, ...metadata } = value;
+  try {
+    const parsed = parseSnapshotRecord(metadata);
+    return typeof Blob !== 'undefined' && audioClip instanceof Blob
+      ? { ...parsed, audioClip }
+      : parsed;
+  } catch {
+    return null;
+  }
+}
+
 export async function listSnapshots(): Promise<SnapshotRecord[]> {
   if (!hasIndexedDb()) {
-    return [...memorySnapshots.values()].sort((left, right) =>
-      right.createdAt.localeCompare(left.createdAt),
-    );
+    return [...memorySnapshots.values()]
+      .map(normalizeStoredSnapshot)
+      .filter((snapshot): snapshot is SnapshotRecord => snapshot !== null)
+      .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
   }
   const database = await openDatabase();
   const transaction = database.transaction(SNAPSHOT_STORE, 'readonly');
-  const snapshots = await requestResult(transaction.objectStore(SNAPSHOT_STORE).getAll());
-  return snapshots.sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+  const storedSnapshots = await requestResult(transaction.objectStore(SNAPSHOT_STORE).getAll());
+  return storedSnapshots
+    .map(normalizeStoredSnapshot)
+    .filter((snapshot): snapshot is SnapshotRecord => snapshot !== null)
+    .sort((left, right) => right.createdAt.localeCompare(left.createdAt));
 }
 
 export async function deleteSnapshot(snapshotId: string): Promise<void> {
-  memorySnapshots.delete(snapshotId);
   if (!hasIndexedDb()) {
+    memorySnapshots.delete(snapshotId);
     return;
   }
   try {
@@ -221,34 +351,108 @@ export async function deleteSnapshot(snapshotId: string): Promise<void> {
     const transaction = database.transaction(SNAPSHOT_STORE, 'readwrite');
     transaction.objectStore(SNAPSHOT_STORE).delete(snapshotId);
     await transactionComplete(transaction);
+    memorySnapshots.delete(snapshotId);
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
+}
+
+export async function clearAllLocalData(): Promise<void> {
+  if (!hasIndexedDb()) {
+    memorySnapshots.clear();
+    memorySessions.clear();
+    memoryEvents.length = 0;
+    return;
+  }
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(
+      [SNAPSHOT_STORE, TEST_SESSION_STORE, TEST_EVENT_STORE],
+      'readwrite',
+    );
+    transaction.objectStore(SNAPSHOT_STORE).clear();
+    transaction.objectStore(TEST_SESSION_STORE).clear();
+    transaction.objectStore(TEST_EVENT_STORE).clear();
+    await transactionComplete(transaction);
+    memorySnapshots.clear();
+    memorySessions.clear();
+    memoryEvents.length = 0;
   } catch (error) {
     throw normalizeStorageError(error);
   }
 }
 
 export async function saveTestLogSession(session: TestLogSession): Promise<void> {
-  memorySessions.set(session.sessionId, session);
   if (!hasIndexedDb()) {
+    memorySessions.set(session.sessionId, session);
     return;
   }
-  const database = await openDatabase();
-  const transaction = database.transaction(TEST_SESSION_STORE, 'readwrite');
-  transaction.objectStore(TEST_SESSION_STORE).put(session);
-  await transactionComplete(transaction);
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(TEST_SESSION_STORE, 'readwrite');
+    transaction.objectStore(TEST_SESSION_STORE).put(session);
+    await transactionComplete(transaction);
+    memorySessions.set(session.sessionId, session);
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
 }
 
 export async function appendTestLogEvents(events: TestLogEvent[]): Promise<void> {
-  memoryEvents.push(...events);
   if (!hasIndexedDb() || events.length === 0) {
+    memoryEvents.push(...events);
     return;
   }
-  const database = await openDatabase();
-  const transaction = database.transaction(TEST_EVENT_STORE, 'readwrite');
-  const store = transaction.objectStore(TEST_EVENT_STORE);
-  for (const event of events) {
-    store.put(event);
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction(TEST_EVENT_STORE, 'readwrite');
+    const store = transaction.objectStore(TEST_EVENT_STORE);
+    for (const event of events) {
+      store.put(event);
+    }
+    await transactionComplete(transaction);
+    memoryEvents.push(...events);
+  } catch (error) {
+    throw normalizeStorageError(error);
   }
-  await transactionComplete(transaction);
+}
+
+export async function deleteTestLogSession(sessionId: string): Promise<void> {
+  if (!hasIndexedDb()) {
+    memorySessions.delete(sessionId);
+    for (let index = memoryEvents.length - 1; index >= 0; index -= 1) {
+      if (memoryEvents[index]?.sessionId === sessionId) {
+        memoryEvents.splice(index, 1);
+      }
+    }
+    return;
+  }
+  try {
+    const database = await openDatabase();
+    const transaction = database.transaction([TEST_SESSION_STORE, TEST_EVENT_STORE], 'readwrite');
+    transaction.objectStore(TEST_SESSION_STORE).delete(sessionId);
+    const cursorRequest = transaction
+      .objectStore(TEST_EVENT_STORE)
+      .index('sessionId')
+      .openCursor(sessionId);
+    cursorRequest.onsuccess = () => {
+      const cursor = cursorRequest.result;
+      if (!cursor) {
+        return;
+      }
+      cursor.delete();
+      cursor.continue();
+    };
+    await transactionComplete(transaction);
+    memorySessions.delete(sessionId);
+    for (let index = memoryEvents.length - 1; index >= 0; index -= 1) {
+      if (memoryEvents[index]?.sessionId === sessionId) {
+        memoryEvents.splice(index, 1);
+      }
+    }
+  } catch (error) {
+    throw normalizeStorageError(error);
+  }
 }
 
 export async function exportTestLog(sessionId: string): Promise<TestLogExport> {
@@ -285,15 +489,23 @@ export async function exportTestLog(sessionId: string): Promise<TestLogExport> {
   };
 }
 
+export async function exportAllTestLogs(): Promise<TestLogExport[]> {
+  const sessions = await listTestLogSessions();
+  return Promise.all(sessions.map((session) => exportTestLog(session.sessionId)));
+}
+
 export class TestLogWriter {
   readonly session: TestLogSession;
   private pendingEvents: TestLogEvent[] = [];
   private sequence = 0;
   private flushTimer: number | undefined;
+  private flushPromise: Promise<void> | undefined;
   private startPromise: Promise<void> | undefined;
+  private readonly onError?: (error: unknown) => void;
 
-  constructor(session: TestLogSession) {
+  constructor(session: TestLogSession, options: { onError?: (error: unknown) => void } = {}) {
     this.session = session;
+    this.onError = options.onError;
   }
 
   async start(): Promise<void> {
@@ -303,6 +515,10 @@ export class TestLogWriter {
         await saveTestLogSession(this.session);
         await this.flush();
       })();
+      void this.startPromise.catch(() => {
+        this.onError?.(new Error('Could not start the local test log.'));
+        this.startPromise = undefined;
+      });
     }
     await this.startPromise;
   }
@@ -323,7 +539,9 @@ export class TestLogWriter {
     if (this.flushTimer === undefined) {
       this.flushTimer = window.setTimeout(() => {
         this.flushTimer = undefined;
-        void this.flush();
+        void this.flush().catch(() => {
+          // Keep failed events in the queue. The next append or finish call retries them.
+        });
       }, 1_000);
     }
   }
@@ -349,6 +567,27 @@ export class TestLogWriter {
     });
   }
 
+  appendDryWetResult(result: DryWetAnalysisResult): void {
+    this.append('metric', {
+      algorithmVersion: result.algorithmVersion,
+      analysisType: 'dry-wet',
+      channelMode: result.channelMode.mode,
+      channelSwapCandidate: result.channelSwap.candidate,
+      correlationMethod: result.correlationMethod,
+      frameEndSample: result.frameEndSample,
+      frameSampleCount: result.frameSampleCount,
+      frameStartSample: result.frameStartSample,
+      gainDifferenceDb: result.gainDifferenceDb,
+      latencyConfidence: result.latency.confidence,
+      latencyMilliseconds: result.latency.milliseconds,
+      latencyQuality: result.latency.quality,
+      latencySampleOffset: result.latency.sampleOffset,
+      peakDifferenceDb: result.peakDifferenceDb,
+      sampleRate: result.sampleRate,
+      warningCodes: result.warnings.join(','),
+    });
+  }
+
   async finish(status: string): Promise<void> {
     if (this.startPromise) {
       await this.startPromise;
@@ -362,13 +601,30 @@ export class TestLogWriter {
     await saveTestLogSession({ ...this.session, endedAt: new Date().toISOString() });
   }
 
+  async flushPending(): Promise<void> {
+    await this.flush();
+  }
+
   private async flush(): Promise<void> {
-    if (this.pendingEvents.length === 0) {
-      return;
+    if (this.flushPromise) {
+      return this.flushPromise;
     }
-    const events = this.pendingEvents;
-    this.pendingEvents = [];
-    await appendTestLogEvents(events);
+    this.flushPromise = (async () => {
+      if (this.pendingEvents.length === 0) {
+        return;
+      }
+      const events = this.pendingEvents;
+      await appendTestLogEvents(events);
+      this.pendingEvents = this.pendingEvents.slice(events.length);
+    })();
+    try {
+      await this.flushPromise;
+    } catch (error) {
+      this.onError?.(error);
+      throw error;
+    } finally {
+      this.flushPromise = undefined;
+    }
   }
 }
 
@@ -388,6 +644,221 @@ function base64ToBlob(base64: string, type: string): Blob {
     bytes[index] = binary.charCodeAt(index);
   }
   return new Blob([bytes], { type });
+}
+
+const MAX_SNAPSHOT_POINTS = 1_000_000;
+const MAX_SNAPSHOT_LABEL_LENGTH = 256;
+const MAX_SNAPSHOT_NOTES_LENGTH = 10_000;
+const MAX_AUDIO_CLIP_BASE64_LENGTH = 20_000_000;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function requiredString(value: unknown, name: string, maximumLength: number): string {
+  if (typeof value !== 'string' || value.length > maximumLength) {
+    throw new Error(`The snapshot field ${name} is invalid.`);
+  }
+  return value;
+}
+
+function requiredFiniteNumber(value: unknown, name: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new Error(`The snapshot field ${name} is invalid.`);
+  }
+  return value;
+}
+
+function requiredSafeInteger(value: unknown, name: string, minimum = 0): number {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < minimum) {
+    throw new Error(`The snapshot field ${name} is invalid.`);
+  }
+  return value;
+}
+
+function nullableFiniteNumber(value: unknown, name: string): number | null {
+  if (value === null) {
+    return null;
+  }
+  return requiredFiniteNumber(value, name);
+}
+
+function numericArray(
+  value: unknown,
+  name: string,
+  maximumLength: number,
+  minimum?: number,
+): number[] {
+  if (
+    !Array.isArray(value) ||
+    value.length > maximumLength ||
+    value.some(
+      (entry) =>
+        typeof entry !== 'number' ||
+        !Number.isFinite(entry) ||
+        (minimum !== undefined && entry < minimum),
+    )
+  ) {
+    throw new Error(`The snapshot field ${name} is invalid.`);
+  }
+  return value;
+}
+
+function validIsoDate(value: string): string {
+  if (!Number.isFinite(Date.parse(value))) {
+    throw new Error('The snapshot field createdAt is invalid.');
+  }
+  return value;
+}
+
+function isPowerOfTwo(value: number): boolean {
+  return value > 0 && (value & (value - 1)) === 0;
+}
+
+export function parseSnapshotRecord(candidate: unknown): SnapshotRecord {
+  if (!isRecord(candidate)) {
+    throw new Error('The snapshot file contains an invalid record.');
+  }
+  const schemaVersion = requiredSafeInteger(candidate.schemaVersion, 'schemaVersion', 1);
+  if (schemaVersion > SNAPSHOT_SCHEMA_VERSION) {
+    throw new Error('The snapshot file uses a newer unsupported schema.');
+  }
+  const id = requiredString(candidate.id, 'id', 128);
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+    throw new Error('The snapshot field id is invalid.');
+  }
+  const label = requiredString(candidate.label, 'label', MAX_SNAPSHOT_LABEL_LENGTH);
+  const createdAt = validIsoDate(requiredString(candidate.createdAt, 'createdAt', 128));
+  const sampleRate = requiredFiniteNumber(candidate.sampleRate, 'sampleRate');
+  if (sampleRate < 1 || sampleRate > 384_000) {
+    throw new Error('The snapshot field sampleRate is outside the supported range.');
+  }
+  const channelCount = requiredSafeInteger(candidate.channelCount, 'channelCount', 1);
+  if (channelCount > 32) {
+    throw new Error('The snapshot field channelCount is outside the supported range.');
+  }
+  const fftSize = requiredSafeInteger(candidate.fftSize, 'fftSize', 32);
+  if (!isPowerOfTwo(fftSize) || fftSize > 65_536) {
+    throw new Error('The snapshot field fftSize is invalid.');
+  }
+  const waveform = numericArray(candidate.waveform, 'waveform', MAX_SNAPSHOT_POINTS);
+  const spectrum = numericArray(candidate.spectrum, 'spectrum', MAX_SNAPSHOT_POINTS, 0);
+  if (schemaVersion === SNAPSHOT_SCHEMA_VERSION) {
+    if (candidate.spectrumUnit !== 'power-per-bin' || spectrum.length !== fftSize / 2 + 1) {
+      throw new Error('The snapshot file contains an unsupported calibrated spectrum.');
+    }
+  }
+  const notes = requiredString(candidate.notes, 'notes', MAX_SNAPSHOT_NOTES_LENGTH);
+  const startSample = requiredSafeInteger(candidate.startSample, 'startSample');
+  const endSample = requiredSafeInteger(candidate.endSample, 'endSample');
+  if (endSample < startSample) {
+    throw new Error('The snapshot sample range is invalid.');
+  }
+  const algorithmVersion = requiredString(candidate.algorithmVersion, 'algorithmVersion', 64);
+  const sessionId = requiredString(candidate.sessionId, 'sessionId', 128);
+  const inputDeviceLabel =
+    candidate.inputDeviceLabel === undefined
+      ? undefined
+      : requiredString(candidate.inputDeviceLabel, 'inputDeviceLabel', 512);
+  if (candidate.window !== 'hann') {
+    throw new Error('The snapshot field window is unsupported.');
+  }
+
+  if (!isRecord(candidate.metrics)) {
+    throw new Error('The snapshot field metrics is invalid.');
+  }
+  const metrics = candidate.metrics;
+  const clippingCandidate = metrics.clippingCandidate;
+  if (typeof clippingCandidate !== 'boolean') {
+    throw new Error('The snapshot field metrics.clippingCandidate is invalid.');
+  }
+  const metricsSampleRate = requiredFiniteNumber(metrics.sampleRate, 'metrics.sampleRate');
+  if (metricsSampleRate !== sampleRate) {
+    throw new Error('The snapshot sample rates do not match.');
+  }
+  const metricSampleCount = requiredSafeInteger(metrics.sampleCount, 'metrics.sampleCount', 1);
+  const metricConfidence = (value: unknown, name: string): 'high' | 'low' | 'medium' | null => {
+    if (value === null || value === undefined) {
+      return null;
+    }
+    if (value !== 'high' && value !== 'low' && value !== 'medium') {
+      throw new Error(`The snapshot field ${name} is invalid.`);
+    }
+    return value;
+  };
+
+  const comparisonStatus =
+    schemaVersion === 1 ? 'legacy-uncomparable' : candidate.comparisonStatus || 'comparable';
+  if (comparisonStatus !== 'comparable' && comparisonStatus !== 'legacy-uncomparable') {
+    throw new Error('The snapshot field comparisonStatus is invalid.');
+  }
+  const humFrequencyHz = nullableFiniteNumber(metrics.humFrequencyHz, 'metrics.humFrequencyHz');
+  if (humFrequencyHz !== null && humFrequencyHz !== 50 && humFrequencyHz !== 60) {
+    throw new Error('The snapshot field metrics.humFrequencyHz is invalid.');
+  }
+
+  const audioClipBase64 = candidate.audioClipBase64;
+  let audioClip: Blob | undefined;
+  if (audioClipBase64 !== undefined) {
+    const encoded = requiredString(
+      audioClipBase64,
+      'audioClipBase64',
+      MAX_AUDIO_CLIP_BASE64_LENGTH,
+    );
+    if (encoded.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(encoded)) {
+      throw new Error('The snapshot audio clip encoding is invalid.');
+    }
+    const audioClipType =
+      candidate.audioClipType === undefined
+        ? 'audio/webm'
+        : requiredString(candidate.audioClipType, 'audioClipType', 128);
+    try {
+      audioClip = base64ToBlob(encoded, audioClipType);
+    } catch (error) {
+      throw new Error('The snapshot audio clip could not be decoded.', { cause: error });
+    }
+  }
+
+  return {
+    algorithmVersion,
+    ...(audioClip ? { audioClip } : {}),
+    channelCount,
+    comparisonStatus,
+    createdAt,
+    endSample,
+    fftSize,
+    id,
+    ...(inputDeviceLabel === undefined ? {} : { inputDeviceLabel }),
+    label,
+    metrics: {
+      clippingCandidate,
+      crestFactorDb: nullableFiniteNumber(metrics.crestFactorDb, 'metrics.crestFactorDb'),
+      dominantFrequencyHz: nullableFiniteNumber(
+        metrics.dominantFrequencyHz,
+        'metrics.dominantFrequencyHz',
+      ),
+      humConfidence: metricConfidence(metrics.humConfidence, 'metrics.humConfidence'),
+      humFrequencyHz,
+      noiseFloorConfidence: metricConfidence(
+        metrics.noiseFloorConfidence,
+        'metrics.noiseFloorConfidence',
+      ),
+      noiseFloorDbfs: nullableFiniteNumber(metrics.noiseFloorDbfs, 'metrics.noiseFloorDbfs'),
+      peakDbfs: requiredFiniteNumber(metrics.peakDbfs, 'metrics.peakDbfs'),
+      rmsDbfs: requiredFiniteNumber(metrics.rmsDbfs, 'metrics.rmsDbfs'),
+      sampleCount: metricSampleCount,
+      sampleRate: metricsSampleRate,
+    },
+    notes,
+    sampleRate,
+    schemaVersion,
+    sessionId,
+    spectrum,
+    ...(schemaVersion === SNAPSHOT_SCHEMA_VERSION ? { spectrumUnit: 'power-per-bin' } : {}),
+    startSample,
+    waveform,
+    window: 'hann',
+  };
 }
 
 export async function exportSnapshots(): Promise<string> {
@@ -418,7 +889,12 @@ export async function importSnapshots(serialized: string): Promise<number> {
     throw new Error('Snapshot import is too large.');
   }
 
-  const parsed: unknown = JSON.parse(serialized);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(serialized);
+  } catch (error) {
+    throw new Error('The snapshot file is not valid JSON.', { cause: error });
+  }
   if (
     !parsed ||
     typeof parsed !== 'object' ||
@@ -427,50 +903,25 @@ export async function importSnapshots(serialized: string): Promise<number> {
     throw new Error('The snapshot file is invalid.');
   }
 
-  let importedCount = 0;
-  for (const candidate of (parsed as { snapshots: unknown[] }).snapshots) {
-    if (!candidate || typeof candidate !== 'object') {
-      throw new Error('The snapshot file contains an invalid record.');
-    }
-    const entry = candidate as Partial<SnapshotExportBundle['snapshots'][number]>;
-    if (
-      typeof entry.id !== 'string' ||
-      typeof entry.label !== 'string' ||
-      typeof entry.createdAt !== 'string' ||
-      typeof entry.sampleRate !== 'number' ||
-      !Number.isFinite(entry.sampleRate) ||
-      entry.sampleRate <= 0 ||
-      !Array.isArray(entry.waveform) ||
-      entry.waveform.some((value) => typeof value !== 'number' || !Number.isFinite(value)) ||
-      !Array.isArray(entry.spectrum) ||
-      entry.spectrum.some(
-        (value) => typeof value !== 'number' || !Number.isFinite(value) || value < 0,
-      )
-    ) {
-      throw new Error('The snapshot file contains an incomplete record.');
-    }
-    if (
-      entry.schemaVersion === SNAPSHOT_SCHEMA_VERSION &&
-      (entry.spectrumUnit !== 'power-per-bin' ||
-        !Number.isInteger(entry.fftSize) ||
-        entry.fftSize === undefined ||
-        entry.fftSize <= 0 ||
-        entry.spectrum.length !== entry.fftSize / 2 + 1)
-    ) {
-      throw new Error('The snapshot file contains an unsupported calibrated spectrum.');
-    }
-    if (typeof entry.schemaVersion === 'number' && entry.schemaVersion > SNAPSHOT_SCHEMA_VERSION) {
-      throw new Error('The snapshot file uses a newer unsupported schema.');
-    }
-
-    const { audioClipBase64, audioClipType, ...metadata } = entry;
-    await saveSnapshot({
-      ...metadata,
-      ...(audioClipBase64
-        ? { audioClip: base64ToBlob(audioClipBase64, audioClipType || 'audio/webm') }
-        : {}),
-    } as SnapshotRecord);
-    importedCount += 1;
+  const bundle = parsed as { schemaVersion?: unknown; snapshots: unknown[] };
+  if (
+    typeof bundle.schemaVersion !== 'number' ||
+    !Number.isInteger(bundle.schemaVersion) ||
+    bundle.schemaVersion < 1 ||
+    bundle.schemaVersion > SNAPSHOT_SCHEMA_VERSION ||
+    bundle.snapshots.length > 2_048
+  ) {
+    throw new Error('The snapshot bundle schema is unsupported.');
   }
-  return importedCount;
+  const ids = new Set<string>();
+  const snapshots = bundle.snapshots.map((candidate) => {
+    const snapshot = parseSnapshotRecord(candidate);
+    if (ids.has(snapshot.id)) {
+      throw new Error('The snapshot file contains duplicate ids.');
+    }
+    ids.add(snapshot.id);
+    return snapshot;
+  });
+  await saveSnapshotsAtomically(snapshots);
+  return snapshots.length;
 }

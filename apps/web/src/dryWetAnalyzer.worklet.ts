@@ -7,7 +7,7 @@ import {
 declare abstract class AudioWorkletProcessor {
   readonly port: MessagePort;
 
-  constructor(options?: { processorOptions?: Record<string, number> });
+  constructor(options?: { processorOptions?: Record<string, number | string> });
   abstract process(
     inputs: Float32Array[][],
     outputs: Float32Array[][],
@@ -17,7 +17,9 @@ declare abstract class AudioWorkletProcessor {
 
 declare function registerProcessor(
   name: string,
-  processor: new (options?: { processorOptions?: Record<string, number> }) => AudioWorkletProcessor,
+  processor: new (options?: {
+    processorOptions?: Record<string, number | string>;
+  }) => AudioWorkletProcessor,
 ): void;
 
 interface DryWetProcessorOptions {
@@ -30,12 +32,21 @@ interface DryWetProcessorOptions {
 }
 
 type DryWetWorkletMessage =
-  { kind: 'error'; message: string } | { kind: 'result'; result: DryWetAnalysisResult };
+  | { kind: 'error'; message: string }
+  | { kind: 'result'; result: DryWetAnalysisResult }
+  | {
+      actualChannelCount: number;
+      droppedQuantumCount: number;
+      expectedChannelCount: number;
+      kind: 'status';
+    };
 
 class DryWetAnalyzerProcessor extends AudioWorkletProcessor {
   private readonly dryChannelIndex: number;
   private readonly drySamples: number[] = [];
   private readonly frameSize: number;
+  private droppedQuantumCount = 0;
+  private readonly expectedChannelCount: number;
   private frameStartSample = 0;
   private readonly sampleRate: number;
   private readonly wetChannelIndex: number;
@@ -45,9 +56,10 @@ class DryWetAnalyzerProcessor extends AudioWorkletProcessor {
     super(options);
     const processorOptions = options?.processorOptions ?? {};
     this.dryChannelIndex = processorOptions.dryChannelIndex ?? 0;
-    this.frameSize = processorOptions.frameSize ?? 4_096;
+    this.frameSize = processorOptions.frameSize ?? 8_192;
     this.sampleRate = processorOptions.sampleRate ?? 48_000;
     this.wetChannelIndex = processorOptions.wetChannelIndex ?? 1;
+    this.expectedChannelCount = Math.max(this.dryChannelIndex, this.wetChannelIndex) + 1;
   }
 
   process(inputs: Float32Array[][]): boolean {
@@ -55,6 +67,15 @@ class DryWetAnalyzerProcessor extends AudioWorkletProcessor {
     const dry = channels[this.dryChannelIndex];
     const wet = channels[this.wetChannelIndex];
     if (!dry || !wet || dry.length !== wet.length) {
+      this.droppedQuantumCount += 1;
+      if (this.droppedQuantumCount === 1 || this.droppedQuantumCount % 30 === 0) {
+        this.post({
+          actualChannelCount: channels.length,
+          droppedQuantumCount: this.droppedQuantumCount,
+          expectedChannelCount: this.expectedChannelCount,
+          kind: 'status',
+        });
+      }
       return true;
     }
 
@@ -79,7 +100,13 @@ class DryWetAnalyzerProcessor extends AudioWorkletProcessor {
       this.frameStartSample += this.frameSize;
 
       try {
-        this.post({ kind: 'result', result: analyzeDryWet({ dry: dryFrame, wet: wetFrame }) });
+        this.post({
+          kind: 'result',
+          result: analyzeDryWet(
+            { dry: dryFrame, wet: wetFrame },
+            { correlationMethod: 'gcc-phat' },
+          ),
+        });
       } catch (error) {
         this.post({
           kind: 'error',

@@ -45,3 +45,6 @@ jobs:
 
       - name: Production build
         run: npm run build
+
+      - name: Production PWA offline test
+        run: npm run test:e2e:pwa --workspace @tone-capture-doctor/web

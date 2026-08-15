@@ -34,6 +34,12 @@ export interface DryWetAnalysisSession {
 export type AudioMetricsHandler = (metrics: AudioMetrics) => void;
 export type DryWetAnalysisHandler = (result: DryWetAnalysisResult) => void;
 
+export interface DryWetAnalysisStatus {
+  actualChannelCount: number;
+  droppedQuantumCount: number;
+  expectedChannelCount: number;
+}
+
 export interface AudioAnalysisOptions {
   sampleRate?: number;
 }
@@ -41,6 +47,8 @@ export interface AudioAnalysisOptions {
 export interface DryWetAnalysisOptions {
   dryChannelIndex: number;
   frameSize?: number;
+  onError?: (error: AudioAnalysisError) => void;
+  onStatus?: (status: DryWetAnalysisStatus) => void;
   sampleRate?: number;
   wetChannelIndex: number;
 }
@@ -149,7 +157,7 @@ export async function startDryWetAnalysis(
       numberOfOutputs: 1,
       processorOptions: {
         dryChannelIndex: options.dryChannelIndex,
-        frameSize: options.frameSize ?? 4_096,
+        frameSize: options.frameSize ?? 8_192,
         sampleRate: context.sampleRate,
         wetChannelIndex: options.wetChannelIndex,
       },
@@ -158,10 +166,32 @@ export async function startDryWetAnalysis(
     muteGain.gain.value = 0;
 
     node.port.onmessage = (
-      event: MessageEvent<{ kind: string; result?: DryWetAnalysisResult }>,
+      event: MessageEvent<{
+        actualChannelCount?: number;
+        droppedQuantumCount?: number;
+        expectedChannelCount?: number;
+        kind: string;
+        message?: string;
+        result?: DryWetAnalysisResult;
+      }>,
     ) => {
       if (event.data.kind === 'result' && event.data.result) {
         onResult(event.data.result);
+      } else if (
+        event.data.kind === 'status' &&
+        typeof event.data.actualChannelCount === 'number' &&
+        typeof event.data.droppedQuantumCount === 'number' &&
+        typeof event.data.expectedChannelCount === 'number'
+      ) {
+        options.onStatus?.({
+          actualChannelCount: event.data.actualChannelCount,
+          droppedQuantumCount: event.data.droppedQuantumCount,
+          expectedChannelCount: event.data.expectedChannelCount,
+        });
+      } else if (event.data.kind === 'error') {
+        options.onError?.(
+          new AudioAnalysisError('unavailable', event.data.message ?? 'Dry/wet analysis failed.'),
+        );
       }
     };
     source.connect(node);

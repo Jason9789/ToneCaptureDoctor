@@ -17,6 +17,7 @@
     "typecheck": "npm run typecheck --workspace @tone-capture-doctor/glossary && npm run typecheck --workspace @tone-capture-doctor/analysis-rules && npm run typecheck --workspace @tone-capture-doctor/audio-core && npm run typecheck --workspace @tone-capture-doctor/web",
     "test": "npm run test --workspace @tone-capture-doctor/glossary && npm run test --workspace @tone-capture-doctor/analysis-rules && npm run test --workspace @tone-capture-doctor/audio-core && npm run test --workspace @tone-capture-doctor/web",
     "test:e2e": "npm run test:e2e --workspace @tone-capture-doctor/web",
+    "test:e2e:pwa": "npm run build && npm run test:e2e:pwa --workspace @tone-capture-doctor/web",
     "build": "npm run build --workspace @tone-capture-doctor/web",
     "preview": "npm run preview --workspace @tone-capture-doctor/web",
     "format": "prettier --write package.json tsconfig*.json *.config.mjs apps/web/**/*.{ts,tsx,css,html,json} packages/**/*.{ts,json}",

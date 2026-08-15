@@ -1,6 +1,7 @@
 import type {
   DryWetAnalysisResult,
   DryWetChannelMode,
+  DryWetLatencySummary,
   DryWetWarningCode,
 } from '@tone-capture-doctor/audio-core';
 
@@ -9,6 +10,8 @@ import type { Locale, Messages } from './i18n';
 interface DryWetDoctorPanelProps {
   channelCount?: number;
   dryChannelIndex: number;
+  droppedQuantumCount: number;
+  latencySummary: DryWetLatencySummary | null;
   locale: Locale;
   messages: Messages['dryWet'];
   onDryChannelChange: (index: number) => void;
@@ -59,6 +62,8 @@ function warningLabel(warning: DryWetWarningCode, messages: Messages['dryWet']):
 export function DryWetDoctorPanel({
   channelCount,
   dryChannelIndex,
+  droppedQuantumCount,
+  latencySummary,
   locale,
   messages,
   onDryChannelChange,
@@ -119,6 +124,11 @@ export function DryWetDoctorPanel({
             </label>
           </div>
           <p className="analysis-state">{statusMessage}</p>
+          {droppedQuantumCount > 0 && (
+            <p className="analysis-state">
+              {messages.droppedQuanta}: {droppedQuantumCount.toLocaleString(locale)}
+            </p>
+          )}
           {result && (
             <>
               <dl className="settings-list dry-wet-metrics">
@@ -140,6 +150,19 @@ export function DryWetDoctorPanel({
                 <div>
                   <dt>{messages.correlation}</dt>
                   <dd>{result.latency.correlation?.toFixed(2) ?? '—'}</dd>
+                </div>
+                <div>
+                  <dt>{messages.repeatability}</dt>
+                  <dd>
+                    {latencySummary?.medianSampleOffset ?? '—'} samples ·{' '}
+                    {latencySummary?.stability === 'high'
+                      ? messages.repeatabilityHigh
+                      : latencySummary?.stability === 'medium'
+                        ? messages.repeatabilityMedium
+                        : latencySummary?.stability === 'low'
+                          ? messages.repeatabilityLow
+                          : messages.unavailableMetric}
+                  </dd>
                 </div>
                 <div>
                   <dt>{messages.gainDifference}</dt>
@@ -180,6 +203,7 @@ export function DryWetDoctorPanel({
                       <tr>
                         <th>{messages.band}</th>
                         <th>{messages.delta}</th>
+                        <th>{messages.levelMatchedDelta}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -190,6 +214,7 @@ export function DryWetDoctorPanel({
                             {band.maximumHz.toLocaleString(locale)} Hz
                           </td>
                           <td>{formatDb(band.deltaDb)}</td>
+                          <td>{formatDb(band.levelMatchedDeltaDb)}</td>
                         </tr>
                       ))}
                     </tbody>

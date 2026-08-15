@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { analyzeDryWet } from '@tone-capture-doctor/audio-core';
+
 import {
   createSessionId,
+  clearAllLocalData,
   deleteSnapshot,
   exportSnapshots,
   exportTestLog,
@@ -125,6 +128,40 @@ describe('local test session storage', () => {
     });
   });
 
+  it('stores dry/wet summaries without raw audio arrays', async () => {
+    const sessionId = createSessionId();
+    const writer = new TestLogWriter({
+      appVersion: 'test',
+      locale: 'en',
+      sessionId,
+      startedAt: new Date().toISOString(),
+      trackSettings: { channelCount: 2, sampleRate: 48_000 },
+    });
+    await writer.start();
+    const signal = new Float32Array(32).fill(0.1);
+    writer.appendDryWetResult(
+      analyzeDryWet(
+        {
+          dry: { frameStartSample: 0, sampleRate: 48_000, samples: signal },
+          wet: { frameStartSample: 0, sampleRate: 48_000, samples: signal },
+        },
+        { correlationMethod: 'gcc-phat' },
+      ),
+    );
+    await writer.finish('stopped');
+
+    const exported = await exportTestLog(sessionId);
+    const dryWetEvent = exported.events.find(
+      (event) => event.eventType === 'metric' && event.payload.analysisType === 'dry-wet',
+    );
+    expect(dryWetEvent?.payload).toMatchObject({
+      algorithmVersion: '0.2.0',
+      correlationMethod: 'gcc-phat',
+    });
+    expect(dryWetEvent?.payload).not.toHaveProperty('samples');
+    expect(dryWetEvent?.payload).not.toHaveProperty('rawAudio');
+  });
+
   it('lists 100 local snapshots without a slow storage scan', async () => {
     const startedAt = performance.now();
     await Promise.all(
@@ -172,19 +209,44 @@ describe('local test session storage', () => {
       schemaVersion: 2,
       snapshots: [
         {
+          algorithmVersion: '0.1.0',
+          channelCount: 1,
           createdAt: new Date().toISOString(),
+          endSample: 2_048,
           fftSize: 2_048,
           id: 'invalid-spectrum',
           label: 'invalid',
+          metrics: {
+            clippingCandidate: false,
+            crestFactorDb: null,
+            dominantFrequencyHz: null,
+            humConfidence: null,
+            humFrequencyHz: null,
+            noiseFloorConfidence: null,
+            noiseFloorDbfs: -60,
+            peakDbfs: -12,
+            rmsDbfs: -18,
+            sampleCount: 2_048,
+            sampleRate: 48_000,
+          },
+          notes: '',
           sampleRate: 48_000,
           schemaVersion: 2,
+          sessionId: 'invalid-session',
           spectrum: [0.1, 0.2],
           spectrumUnit: 'magnitude',
+          startSample: 0,
           waveform: [0, 0.1],
+          window: 'hann',
         },
       ],
     });
 
     await expect(importSnapshots(invalid)).rejects.toThrow(/calibrated spectrum/i);
+  });
+
+  it('deletes all local memory data as an explicit privacy operation', async () => {
+    await clearAllLocalData();
+    expect(await listSnapshots()).toEqual([]);
   });
 });

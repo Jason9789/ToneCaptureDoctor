@@ -38,9 +38,11 @@ Phase 8 adds Dry/Wet Doctor for two channels from one interface: frame-coordinat
 cross-correlation latency candidates, gain/peak differences, dynamics and frequency-band deltas,
 and explicit no-signal, mono-like, and possible channel-swap warnings. Latency is labelled as
 measured or estimated, and the safe routing notes are bilingual in
-[`docs/routing/dry-wet-interface.md`](docs/routing/dry-wet-interface.md). Phase 9 has started with
-a production-only web manifest and same-origin offline shell; service-worker support and `.tonecheck`
-round-trip remain release gates.
+[`docs/routing/dry-wet-interface.md`](docs/routing/dry-wet-interface.md). Phase 9 now includes a
+checksummed `.tonecheck` archive, strict snapshot validation, IndexedDB migration, and a production
+offline shell that precaches built assets. Real browser offline verification and device verification
+remain release gates. See [`PRIVACY.md`](./PRIVACY.md) and
+[`docs/research/measurement-sources.md`](docs/research/measurement-sources.md).
 
 The first product goal is **Signal Health**:
 
@@ -96,7 +98,9 @@ When an interface is available, a Signal Health session also records structured 
 events in local browser storage. Use **Export test log** to download a JSON file for later review.
 The log contains measurements, settings, timestamps, and algorithm/schema versions; it does not
 contain raw audio. A raw clip is kept only when you explicitly save a snapshot, and remains local
-to that snapshot. Snapshot metadata can be exported/imported separately as JSON.
+to that snapshot. Snapshot metadata can be exported/imported separately as JSON. **Export .tonecheck**
+creates a checksummed session archive; it includes raw clips only when you explicitly saved them.
+**Delete all local data** removes local snapshots, clips, sessions, and test events from this browser.
 Choose two saved snapshots in Tone Compare to inspect loudness normalization, alignment,
 waveform/spectrum differences, frequency-band changes, and confidence. The comparison does not
 produce a universal tone score.
@@ -212,9 +216,8 @@ expected result, actual result, and sanitized evidence. Do not attach private re
 
 ### License
 
-The project is being prepared as open source. The code and documentation license files are part of
-the release baseline and will be published before the first public release. Until a license file is
-present, do not assume that the repository grants redistribution or commercial-use rights.
+The project is released under the [MIT License](./LICENSE). Review [`PRIVACY.md`](./PRIVACY.md)
+before sharing exported sessions.
 
 ### References
 
@@ -265,8 +268,11 @@ Phase 8에서는 하나의 인터페이스에서 두 채널을 받아 Dry/Wet Do
 좌표 검증, cross-correlation 기반 지연 후보, gain/peak 차이, 다이내믹·주파수 대역 차이,
 무신호·모노 유사·채널 스왑 후보 경고를 제공하며 지연을 측정값과 추정값으로 구분합니다.
 안전한 라우팅 문서는 [`docs/routing/dry-wet-interface.md`](docs/routing/dry-wet-interface.md)에
-영어·한글로 기록했습니다. Phase 9는 production 전용 web manifest와 동일 출처 offline shell로
-시작했으며, service worker 환경 검증과 `.tonecheck` round-trip은 release Gate로 남아 있습니다.
+영어·한글로 기록했습니다. Phase 9에서는 checksum을 포함한 `.tonecheck` archive, 엄격한 snapshot
+검증, IndexedDB migration, build asset offline shell을 구현했습니다. 실제 브라우저 offline 검증과
+실제 오인페 검증은 아직 release Gate입니다. 개인정보 정책은 [`PRIVACY.md`](./PRIVACY.md),
+장비·측정 조사 경계는 [`docs/research/measurement-sources.md`](docs/research/measurement-sources.md)에
+기록했습니다.
 
 MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤 release 시점에만
 `main`에 병합합니다. 일상적인 통합 대상은 `develop`이며, 기능 개발은 짧은 작업 브랜치에서
@@ -314,9 +320,11 @@ Vite가 표시한 로컬 주소를 브라우저에서 엽니다. Signal Health �
 저장소에 구조화해 기록합니다. **테스트 로그 내보내기**로 나중에 검토할 JSON을 받을 수 있습니다.
 로그에는 측정값, 설정, 시각, 알고리즘/스키마 버전이 들어가며 raw audio는 들어가지 않습니다. raw
 clip은 사용자가 스냅샷 저장을 명시적으로 선택한 경우에만 해당 스냅샷에 로컬로 보관됩니다.
-스냅샷 metadata는 별도의 JSON으로 export/import할 수 있습니다. 저장한 스냅샷 2개를 Tone Compare에서
-선택하면 음량 보정량, 정렬량, 파형/스펙트럼 차이, 주파수 대역 변화, confidence를 확인할 수
-있으며 보편적인 톤 점수는 만들지 않습니다.
+스냅샷 metadata는 별도의 JSON으로 export/import할 수 있습니다. **.tonecheck 내보내기**는 checksum이
+있는 session archive를 만들며, 사용자가 명시적으로 저장한 스냅샷의 raw clip만 포함합니다.
+**로컬 데이터 전체 삭제**로 이 브라우저의 스냅샷, clip, session, test event를 삭제할 수 있습니다.
+저장한 스냅샷 2개를 Tone Compare에서 선택하면 음량 보정량, 정렬량, 파형/스펙트럼 차이,
+주파수 대역 변화, confidence를 확인할 수 있으며 보편적인 톤 점수는 만들지 않습니다.
 
 Windows PowerShell:
 
@@ -428,9 +436,8 @@ AI_HARNESS.md      AI 개발과 검토 계약
 
 ### 라이선스
 
-이 프로젝트는 오픈소스 공개를 준비 중입니다. 코드와 문서 라이선스 파일은 첫 공개 release
-기준선에 포함해 게시할 예정입니다. 라이선스 파일이 추가되기 전에는 저장소가 재배포 또는
-상업적 사용 권리를 부여한다고 가정하지 마세요.
+이 프로젝트는 [MIT License](./LICENSE)로 공개합니다. export한 session을 공유하기 전에
+[`PRIVACY.md`](./PRIVACY.md)를 확인하세요.
 
 ### 참고 문서
 

@@ -4,6 +4,6 @@ export function registerServiceWorker(): void {
   }
 
   window.addEventListener('load', () => {
-    void navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    void navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => undefined);
   });
 }

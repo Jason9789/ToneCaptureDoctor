@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { analyzeDryWet, type DryWetAnalysisInput, type DryWetFrame } from './dryWet';
+import {
+  analyzeDryWet,
+  summarizeDryWetLatency,
+  type DryWetAnalysisInput,
+  type DryWetFrame,
+} from './dryWet';
 
 const SAMPLE_RATE = 48_000;
 const FRAME_START_SAMPLE = 96_000;
@@ -68,6 +73,20 @@ describe('dry/wet analysis', () => {
     expect(result.channelMode.mode).toBe('stereo-distinct');
   });
 
+  it('uses GCC-PHAT to find a known delay while reporting normalized confidence', () => {
+    const signal = deterministicSignal();
+    const delaySamples = 41;
+    const result = analyzeDryWet(input(signal, delayed(signal, delaySamples)), {
+      correlationMethod: 'gcc-phat',
+      maxLagSamples: 128,
+    });
+
+    expect(result.correlationMethod).toBe('gcc-phat');
+    expect(result.latency.sampleOffset).toBe(delaySamples);
+    expect(result.latency.correlation).toBeGreaterThan(0.99);
+    expect(result.latency.quality).toBe('measured');
+  });
+
   it('labels a usable but noisy correlation as estimated instead of measured', () => {
     const signal = deterministicSignal();
     const unrelatedNoise = deterministicNoise(0x8a11ce);
@@ -101,6 +120,7 @@ describe('dry/wet analysis', () => {
     expect(result.warnings).toContain('mono-like-input');
     expect(result.spectrumDifference).toHaveLength(5);
     expect(result.spectrumDifference[0]?.deltaDb).toBeCloseTo(-6.0206, 2);
+    expect(result.spectrumDifference[0]?.levelMatchedDeltaDb).toBeCloseTo(0, 2);
     expect(result.dynamics.wet.crestFactorDb).toBeCloseTo(
       result.dynamics.dry.crestFactorDb ?? 0,
       5,
@@ -119,6 +139,20 @@ describe('dry/wet analysis', () => {
     expect(result.latency.quality).toBe('unavailable');
     expect(result.channelMode.mode).toBe('no-signal');
     expect(result.warnings).toEqual(['both-no-signal']);
+  });
+
+  it('summarizes repeated latency candidates with median and MAD', () => {
+    const signal = deterministicSignal();
+    const results = [37, 38, 37, 36].map((delaySamples) =>
+      analyzeDryWet(input(signal, delayed(signal, delaySamples)), { maxLagSamples: 128 }),
+    );
+    const summary = summarizeDryWetLatency(results);
+
+    expect(summary.repeatCount).toBe(4);
+    expect(summary.medianSampleOffset).toBe(37);
+    expect(summary.madSamples).toBe(0.5);
+    expect(summary.stability).toBe('high');
+    expect(summary.medianMilliseconds).toBeCloseTo((37 / SAMPLE_RATE) * 1_000, 7);
   });
 
   it('flags a likely channel swap when wet leads dry', () => {
