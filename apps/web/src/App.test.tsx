@@ -61,7 +61,20 @@ describe('Signal Health input flow', () => {
 
   afterEach(() => {
     cleanup();
+    window.localStorage.clear();
     vi.restoreAllMocks();
+  });
+
+  it('switches the homepage language and persists the selection', () => {
+    render(<App />);
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Language' }), {
+      target: { value: 'ko' },
+    });
+
+    expect(screen.getByText('로컬 우선 오디오 진단')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Signal Health 시작' })).toBeEnabled();
+    expect(window.localStorage.getItem('tone-capture-doctor.locale')).toBe('ko');
   });
 
   it('requests local input only after Start and shows actual track settings', async () => {

@@ -59,6 +59,28 @@ button:disabled {
   padding-bottom: 4rem;
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.language-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #a7bcb3;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.language-field select {
+  width: auto;
+  min-width: 7rem;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.78rem;
+}
+
 h1,
 h2,
 h3,
@@ -247,6 +269,24 @@ select:disabled {
   text-align: right;
 }
 
+.metrics-panel {
+  min-height: 220px;
+}
+
+.metrics-list {
+  margin-top: 1rem;
+}
+
+.analysis-state {
+  margin-bottom: 0;
+  color: #a7bcb3;
+  font-size: 0.9rem;
+}
+
+.analysis-state-active {
+  color: #9be4c1;
+}
+
 .warning-list {
   margin: 1.25rem 0 0;
   padding-left: 1.1rem;
@@ -277,6 +317,11 @@ select:disabled {
     align-items: flex-start;
     flex-direction: column;
     padding-bottom: 3rem;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: space-between;
   }
 
   .hero,

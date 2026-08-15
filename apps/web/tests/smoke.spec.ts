@@ -43,6 +43,9 @@ test('requests audio after Start and displays the local input session', async ({
   await page.goto('/');
 
   await expect(page.getByRole('heading', { name: 'Signal Health' })).toBeVisible();
+  await page.locator('#language-select').selectOption('ko');
+  await expect(page.getByText('로컬 우선 오디오 진단')).toBeVisible();
+  await page.locator('#language-select').selectOption('en');
   await expect(page.getByRole('button', { name: 'Start Signal Health' })).toBeEnabled();
 
   await page.getByRole('button', { name: 'Start Signal Health' }).click();

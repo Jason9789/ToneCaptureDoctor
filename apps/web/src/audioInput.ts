@@ -34,12 +34,21 @@ export interface AudioTrackSettingsSnapshot {
   sampleRate?: number;
 }
 
+export type AudioInputWarningCode =
+  | 'channel-count-exceeded'
+  | 'echo-cancellation-enabled'
+  | 'echo-cancellation-unknown'
+  | 'gain-control-enabled'
+  | 'gain-control-unknown'
+  | 'noise-suppression-enabled'
+  | 'noise-suppression-unknown';
+
 export interface AudioInputSession {
   devices: AudioInputDevice[];
   selectedDeviceId?: string;
   settings: AudioTrackSettingsSnapshot;
   stream: MediaStream;
-  warnings: string[];
+  warnings: AudioInputWarningCode[];
 }
 
 function hasAudioInputSupport(): boolean {
@@ -138,30 +147,30 @@ function snapshotTrackSettings(track: MediaStreamTrack): AudioTrackSettingsSnaps
   };
 }
 
-function getConstraintWarnings(settings: AudioTrackSettingsSnapshot): string[] {
-  const warnings: string[] = [];
+function getConstraintWarnings(settings: AudioTrackSettingsSnapshot): AudioInputWarningCode[] {
+  const warnings: AudioInputWarningCode[] = [];
 
   if (settings.autoGainControl === undefined) {
-    warnings.push('The browser did not report whether automatic gain control is disabled.');
+    warnings.push('gain-control-unknown');
   }
   if (settings.echoCancellation === undefined) {
-    warnings.push('The browser did not report whether echo cancellation is disabled.');
+    warnings.push('echo-cancellation-unknown');
   }
   if (settings.noiseSuppression === undefined) {
-    warnings.push('The browser did not report whether noise suppression is disabled.');
+    warnings.push('noise-suppression-unknown');
   }
   if (settings.channelCount !== undefined && settings.channelCount > 2) {
-    warnings.push('The browser reported more than two input channels.');
+    warnings.push('channel-count-exceeded');
   }
 
   if (settings.autoGainControl === true) {
-    warnings.push('Automatic gain control is enabled by the browser.');
+    warnings.push('gain-control-enabled');
   }
   if (settings.echoCancellation === true) {
-    warnings.push('Echo cancellation is enabled by the browser.');
+    warnings.push('echo-cancellation-enabled');
   }
   if (settings.noiseSuppression === true) {
-    warnings.push('Noise suppression is enabled by the browser.');
+    warnings.push('noise-suppression-enabled');
   }
 
   return warnings;

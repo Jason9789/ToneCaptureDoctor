@@ -14,13 +14,13 @@
   "scripts": {
     "dev": "npm run dev --workspace @tone-capture-doctor/web",
     "lint": "eslint .",
-    "typecheck": "npm run typecheck --workspace @tone-capture-doctor/web",
-    "test": "npm run test --workspace @tone-capture-doctor/web",
+    "typecheck": "npm run typecheck --workspace @tone-capture-doctor/audio-core && npm run typecheck --workspace @tone-capture-doctor/web",
+    "test": "npm run test --workspace @tone-capture-doctor/audio-core && npm run test --workspace @tone-capture-doctor/web",
     "test:e2e": "npm run test:e2e --workspace @tone-capture-doctor/web",
     "build": "npm run build --workspace @tone-capture-doctor/web",
     "preview": "npm run preview --workspace @tone-capture-doctor/web",
-    "format": "prettier --write package.json tsconfig*.json *.config.mjs apps/web/**/*.{ts,tsx,css,html,json}",
-    "format:check": "prettier --check package.json tsconfig*.json *.config.mjs apps/web/**/*.{ts,tsx,css,html,json}"
+    "format": "prettier --write package.json tsconfig*.json *.config.mjs apps/web/**/*.{ts,tsx,css,html,json} packages/**/*.{ts,json}",
+    "format:check": "prettier --check package.json tsconfig*.json *.config.mjs apps/web/**/*.{ts,tsx,css,html,json} packages/**/*.{ts,json}"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.1",
