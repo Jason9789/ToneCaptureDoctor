@@ -58,3 +58,21 @@ test('requests audio after Start and displays the local input session', async ({
   await page.getByRole('button', { name: 'Stop Signal Health' }).click();
   await expect(page.getByRole('status')).toHaveText('Stopped');
 });
+
+test('keeps the dashboard usable at compact widths and updates document language', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/');
+
+  const dimensions = await page.evaluate(() => ({
+    innerWidth: window.innerWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(dimensions.scrollWidth).toBeLessThanOrEqual(dimensions.innerWidth);
+
+  await page.locator('#language-select').selectOption('ko');
+  await expect(page.locator('html')).toHaveAttribute('lang', 'ko');
+  await expect(page.getByRole('region', { name: 'Dry/Wet Doctor' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Signal Health 시작' })).toBeVisible();
+});

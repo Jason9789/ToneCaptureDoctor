@@ -119,17 +119,15 @@ export async function listAudioInputDevices(): Promise<AudioInputDevice[]> {
   }
 
   const devices = await navigator.mediaDevices.enumerateDevices();
-  let inputIndex = 0;
 
   return devices
     .filter((device) => device.kind === 'audioinput')
     .map((device) => {
-      inputIndex += 1;
       return {
         deviceId: device.deviceId,
         groupId: device.groupId,
         kind: device.kind,
-        label: device.label || `Audio input ${inputIndex}`,
+        label: device.label,
       };
     });
 }

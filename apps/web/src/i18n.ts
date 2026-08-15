@@ -30,12 +30,17 @@ export interface Messages {
     checkInputLevel: string;
     clippingCandidate: string;
     clippingNotice: string;
+    confidence: string;
+    confidenceHigh: string;
+    confidenceLow: string;
+    confidenceMedium: string;
     dominantFrequency: string;
     empty: string;
     eyebrow: string;
     humCandidate: string;
     noiseFloor: string;
     notDetected: string;
+    notReady: string;
     peak: string;
     rms: string;
     title: string;
@@ -71,6 +76,7 @@ export interface Messages {
     spectrum: string;
     spectrogram: string;
     timeWindow: string;
+    title: string;
     waveform: string;
   };
   connection: {
@@ -78,6 +84,7 @@ export interface Messages {
     inputUnavailable: string;
     noLabelledInputs: string;
     startToList: string;
+    switchError: string;
   };
   compare: {
     alignment: string;
@@ -105,6 +112,7 @@ export interface Messages {
     clippingCandidate: string;
     clippingInterpretation: string;
     band: string;
+    incompatible: string;
   };
   glossary: {
     causes: string;
@@ -132,6 +140,49 @@ export interface Messages {
     neverClaim: string;
     observation: string;
     title: string;
+  };
+  dryWet: {
+    active: string;
+    band: string;
+    channel: string;
+    correlation: string;
+    crest: string;
+    delta: string;
+    description: string;
+    dry: string;
+    dryInput: string;
+    dynamics: string;
+    eyebrow: string;
+    gainDifference: string;
+    input: string;
+    latency: string;
+    latencyEstimated: string;
+    latencyMeasured: string;
+    mode: string;
+    modeIndeterminate: string;
+    modeMonoLike: string;
+    modeNoSignal: string;
+    modeStereoDistinct: string;
+    needsTwoChannels: string;
+    peakDifference: string;
+    rms: string;
+    safetyDescription: string;
+    safetyTitle: string;
+    spectrum: string;
+    startRequired: string;
+    starting: string;
+    title: string;
+    unavailable: string;
+    unavailableMetric: string;
+    waitingForSpectrum: string;
+    warningBothNoSignal: string;
+    warningChannelSwap: string;
+    warningDryNoSignal: string;
+    warningLatencyLowConfidence: string;
+    warningMonoLike: string;
+    warningWetNoSignal: string;
+    wet: string;
+    wetInput: string;
   };
   hero: {
     copy: string;
@@ -186,12 +237,17 @@ export const MESSAGES: Record<Locale, Messages> = {
       checkInputLevel: 'Check input level',
       clippingCandidate: 'Clipping candidate',
       clippingNotice: 'Clipping candidate detected. Lower the interface input gain and test again.',
+      confidence: 'Confidence',
+      confidenceHigh: 'High',
+      confidenceLow: 'Low · repeat the test',
+      confidenceMedium: 'Medium · directional evidence',
       dominantFrequency: 'Dominant frequency',
       empty: 'Start Signal Health to calculate local peak, RMS, frequency, and clipping metrics.',
-      eyebrow: 'Phase 4',
+      eyebrow: 'Live measurement',
       humCandidate: 'Hum candidate',
       noiseFloor: 'Noise floor',
       notDetected: 'Not detected',
+      notReady: 'Waiting for enough samples',
       peak: 'Peak',
       rms: 'RMS',
       title: 'Signal metrics',
@@ -220,13 +276,14 @@ export const MESSAGES: Record<Locale, Messages> = {
       save: 'Save snapshot',
       saved: 'Snapshot saved locally.',
       title: 'Test snapshots',
-      eyebrow: 'Phase 5 · local evidence',
+      eyebrow: 'Local evidence',
     },
     visualizer: {
       noSignal: 'Start Signal Health to see the local signal.',
       spectrum: 'Spectrum · logarithmic frequency axis',
       spectrogram: 'Spectrogram',
       timeWindow: 'Waveform zoom',
+      title: 'Signal view',
       waveform: 'Waveform',
     },
     connection: {
@@ -236,6 +293,7 @@ export const MESSAGES: Record<Locale, Messages> = {
       noLabelledInputs:
         'No labelled audio inputs were returned. Check the browser device permission.',
       startToList: 'Start Signal Health to request permission and list available inputs.',
+      switchError: 'The previous input is still connected. The new input could not be opened.',
     },
     compare: {
       alignment: 'Alignment',
@@ -268,11 +326,12 @@ export const MESSAGES: Record<Locale, Messages> = {
       clippingInterpretation:
         'Possible interpretation: clipping can dominate the difference; lower input gain and capture again.',
       band: 'Band',
+      incompatible: 'These snapshots use incompatible analysis data and cannot be compared safely.',
     },
     glossary: {
       causes: 'Possible causes',
       experiments: 'Safe next experiments',
-      eyebrow: 'Phase 7 · glossary',
+      eyebrow: 'Glossary',
       measured: 'Measured by this app',
       noResults: 'No glossary term matches this search.',
       notMeasured: 'Not measured by this app',
@@ -291,10 +350,60 @@ export const MESSAGES: Record<Locale, Messages> = {
       confidenceMedium: 'Medium · useful measurement, not a diagnosis',
       empty: 'No diagnostic rule matched. Repeat with a steady signal if you need more evidence.',
       experiments: 'Safe next experiment',
-      eyebrow: 'Phase 7 · measured guidance',
+      eyebrow: 'Measured guidance',
       neverClaim: 'This rule does not claim',
       observation: 'Measured observation',
       title: 'What to check next',
+    },
+    dryWet: {
+      active: 'Two-channel frames are measured locally.',
+      band: 'Band',
+      channel: 'Channel',
+      correlation: 'Correlation',
+      crest: 'Crest',
+      delta: 'Wet − dry',
+      description:
+        'Compare two channels from the same interface frame. Latency is labelled as measured or estimated; no tone verdict is produced.',
+      dry: 'Dry',
+      dryInput: 'Dry input',
+      dynamics: 'Dynamics',
+      eyebrow: 'Two-channel evidence',
+      gainDifference: 'RMS gain difference',
+      input: 'Input',
+      latency: 'Latency candidate',
+      latencyEstimated: 'estimated',
+      latencyMeasured: 'measured',
+      mode: 'Channel state',
+      modeIndeterminate: 'Not enough signal',
+      modeMonoLike: 'Mono-like',
+      modeNoSignal: 'No signal',
+      modeStereoDistinct: 'Stereo-distinct',
+      needsTwoChannels:
+        'The browser reported fewer than two input channels. Use a two-channel interface or continue with Signal Health.',
+      peakDifference: 'Peak difference',
+      rms: 'RMS',
+      safetyDescription:
+        'Use line/instrument inputs or a manufacturer-approved load box. Never connect an amplifier speaker output directly to an interface input.',
+      safetyTitle: 'Safe routing:',
+      spectrum: 'Spectrum difference',
+      startRequired: 'Start Signal Health to open a local two-channel measurement.',
+      starting: 'Starting two-channel measurement…',
+      title: 'Dry/Wet Doctor',
+      unavailable:
+        'Two-channel measurement is unavailable in this browser; Signal Health remains available.',
+      unavailableMetric: 'unavailable',
+      waitingForSpectrum: 'Waiting for a calibrated spectrum frame.',
+      warningBothNoSignal: 'Neither selected channel has enough signal for a latency candidate.',
+      warningChannelSwap:
+        'Possible channel swap: wet appears to lead dry. Verify the input routing before repeating.',
+      warningDryNoSignal: 'Dry input is below the no-signal threshold.',
+      warningLatencyLowConfidence:
+        'Latency correlation is weak; repeat with the same playing passage.',
+      warningMonoLike:
+        'The selected channels are effectively mono-like. Check whether both inputs carry the same source.',
+      warningWetNoSignal: 'Wet input is below the no-signal threshold.',
+      wet: 'Wet',
+      wetInput: 'Wet input',
     },
     hero: {
       copy: 'Check whether an instrument signal is reaching your interface before comparing tones. The first release keeps analysis local and explains the next useful experiment.',
@@ -394,12 +503,17 @@ export const MESSAGES: Record<Locale, Messages> = {
       clippingCandidate: '클리핑 후보',
       clippingNotice:
         '클리핑 후보가 감지되었습니다. 인터페이스 입력 게인을 낮추고 다시 확인하세요.',
+      confidence: '신뢰도',
+      confidenceHigh: '높음',
+      confidenceLow: '낮음 · 다시 측정하세요',
+      confidenceMedium: '중간 · 방향성 근거',
       dominantFrequency: '주요 주파수',
       empty: 'Signal Health를 시작하면 peak, RMS, 주파수, 클리핑 지표를 로컬에서 계산합니다.',
-      eyebrow: 'Phase 4',
+      eyebrow: '실시간 측정',
       humCandidate: '험 후보',
       noiseFloor: '노이즈 플로어',
       notDetected: '감지되지 않음',
+      notReady: '충분한 샘플을 기다리는 중',
       peak: 'Peak',
       rms: 'RMS',
       title: '신호 지표',
@@ -429,13 +543,14 @@ export const MESSAGES: Record<Locale, Messages> = {
       save: '스냅샷 저장',
       saved: '스냅샷을 로컬에 저장했습니다.',
       title: '테스트 스냅샷',
-      eyebrow: 'Phase 5 · 로컬 증거',
+      eyebrow: '로컬 증거',
     },
     visualizer: {
       noSignal: 'Signal Health를 시작하면 로컬 신호를 볼 수 있습니다.',
       spectrum: '스펙트럼 · 로그 주파수 축',
       spectrogram: '스펙트로그램',
       timeWindow: '파형 확대',
+      title: '신호 보기',
       waveform: '파형',
     },
     connection: {
@@ -445,6 +560,7 @@ export const MESSAGES: Record<Locale, Messages> = {
       noLabelledInputs:
         '이름이 있는 오디오 입력을 받지 못했습니다. 브라우저 장치 권한을 확인하세요.',
       startToList: 'Start Signal Health를 눌러 권한을 요청하고 사용 가능한 입력을 확인하세요.',
+      switchError: '이전 입력 연결은 유지되고 있습니다. 새 입력을 열지 못했습니다.',
     },
     compare: {
       alignment: '정렬',
@@ -475,11 +591,12 @@ export const MESSAGES: Record<Locale, Messages> = {
       clippingInterpretation:
         '가능한 해석: 클리핑이 차이를 지배할 수 있습니다. 입력 게인을 낮추고 다시 캡처하세요.',
       band: '대역',
+      incompatible: '두 스냅샷의 분석 데이터 형식이 달라 안전하게 비교할 수 없습니다.',
     },
     glossary: {
       causes: '가능한 원인',
       experiments: '안전한 다음 실험',
-      eyebrow: 'Phase 7 · 용어 사전',
+      eyebrow: '용어 사전',
       measured: '이 앱이 측정하는 것',
       noResults: '검색과 일치하는 용어가 없습니다.',
       notMeasured: '이 앱이 측정하지 않는 것',
@@ -498,10 +615,59 @@ export const MESSAGES: Record<Locale, Messages> = {
       confidenceMedium: '중간 · 유용한 측정 근거이지 진단은 아님',
       empty: '일치하는 진단 규칙이 없습니다. 더 확인하려면 일정한 신호로 반복하세요.',
       experiments: '안전한 다음 실험',
-      eyebrow: 'Phase 7 · 측정 기반 안내',
+      eyebrow: '측정 기반 안내',
       neverClaim: '이 규칙으로 단정하지 않는 것',
       observation: '측정 관찰',
       title: '다음에 확인할 것',
+    },
+    dryWet: {
+      active: '두 채널 프레임을 브라우저 안에서 측정하고 있습니다.',
+      band: '대역',
+      channel: '채널',
+      correlation: '상관도',
+      crest: '크레스트',
+      delta: 'Wet − dry',
+      description:
+        '같은 인터페이스 프레임의 두 채널을 비교합니다. 지연은 측정값과 추정값을 구분하며 톤 판정은 하지 않습니다.',
+      dry: 'Dry',
+      dryInput: 'Dry 입력',
+      dynamics: '다이내믹',
+      eyebrow: '두 채널 근거',
+      gainDifference: 'RMS 게인 차이',
+      input: '입력',
+      latency: '지연 후보',
+      latencyEstimated: '추정값',
+      latencyMeasured: '측정값',
+      mode: '채널 상태',
+      modeIndeterminate: '신호 부족',
+      modeMonoLike: '모노 유사',
+      modeNoSignal: '무신호',
+      modeStereoDistinct: '스테레오 구분',
+      needsTwoChannels:
+        '브라우저가 두 개 미만의 입력 채널을 보고했습니다. 2채널 인터페이스를 사용하거나 Signal Health를 계속 사용하세요.',
+      peakDifference: 'Peak 차이',
+      rms: 'RMS',
+      safetyDescription:
+        'line/instrument 입력 또는 제조사가 승인한 load box를 사용하세요. 앰프 speaker output을 인터페이스 입력에 직접 연결하지 마세요.',
+      safetyTitle: '안전한 라우팅:',
+      spectrum: '스펙트럼 차이',
+      startRequired: 'Start Signal Health를 눌러 로컬 2채널 측정을 시작하세요.',
+      starting: '2채널 측정을 시작하는 중…',
+      title: 'Dry/Wet Doctor',
+      unavailable:
+        '이 브라우저에서는 2채널 측정을 사용할 수 없지만 Signal Health는 계속 사용할 수 있습니다.',
+      unavailableMetric: '사용 불가',
+      waitingForSpectrum: '보정된 스펙트럼 프레임을 기다리는 중입니다.',
+      warningBothNoSignal: '선택한 두 채널 모두 지연 후보를 계산할 만큼 신호가 없습니다.',
+      warningChannelSwap:
+        '채널 스왑 후보: wet이 dry보다 먼저 나타납니다. 반복 전에 입력 라우팅을 확인하세요.',
+      warningDryNoSignal: 'Dry 입력이 무신호 기준보다 낮습니다.',
+      warningLatencyLowConfidence: '지연 상관도가 약합니다. 같은 연주 구간으로 반복하세요.',
+      warningMonoLike:
+        '선택한 채널이 사실상 모노와 같습니다. 두 입력이 같은 소스를 받는지 확인하세요.',
+      warningWetNoSignal: 'Wet 입력이 무신호 기준보다 낮습니다.',
+      wet: 'Wet',
+      wetInput: 'Wet 입력',
     },
     hero: {
       copy: '톤을 비교하기 전에 악기 신호가 인터페이스에 제대로 들어오는지 확인합니다. 첫 버전은 분석을 로컬에서 수행하고 다음에 해볼 실험을 설명합니다.',

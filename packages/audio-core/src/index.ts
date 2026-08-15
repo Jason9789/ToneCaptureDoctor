@@ -6,6 +6,8 @@ export const DEFAULT_CLIPPING_THRESHOLD = 0.98;
 export const DEFAULT_NOISE_FLOOR_WINDOW_SECONDS = 3;
 export const DEFAULT_HUM_WINDOW_SECONDS = 1;
 
+export * from './dryWet';
+
 export type HumFrequency = 50 | 60;
 export type MeasurementConfidence = 'high' | 'low' | 'medium';
 export type AudioChannelData = readonly Float32Array[];

@@ -36,7 +36,8 @@ export interface SnapshotRecord {
     | 'rmsDbfs'
     | 'sampleCount'
     | 'sampleRate'
-  >;
+  > &
+    Partial<Pick<AudioMetrics, 'humConfidence' | 'noiseFloorConfidence'>>;
   notes: string;
   sampleRate: number;
   schemaVersion: number;

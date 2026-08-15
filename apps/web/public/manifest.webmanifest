@@ -1,0 +1,12 @@
+{
+  "name": "ToneCaptureDoctor",
+  "short_name": "ToneDoctor",
+  "description": "Local-first signal health and dry/wet evidence for instrument interfaces.",
+  "lang": "en",
+  "dir": "ltr",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0e1715",
+  "theme_color": "#10231f",
+  "categories": ["music", "utilities"]
+}

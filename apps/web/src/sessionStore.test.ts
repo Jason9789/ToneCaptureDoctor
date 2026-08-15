@@ -84,7 +84,9 @@ describe('local test session storage', () => {
         clippingCandidate: false,
         crestFactorDb: 3,
         dominantFrequencyHz: 440,
+        humConfidence: 'medium',
         humFrequencyHz: null,
+        noiseFloorConfidence: 'high',
         noiseFloorDbfs: -60,
         peakDbfs: -6,
         rmsDbfs: -12,
@@ -115,6 +117,12 @@ describe('local test session storage', () => {
         sampleRate: 48_000,
       },
     );
+    expect(
+      (await listSnapshots()).find((candidate) => candidate.id === snapshot.id)?.metrics,
+    ).toMatchObject({
+      humConfidence: 'medium',
+      noiseFloorConfidence: 'high',
+    });
   });
 
   it('lists 100 local snapshots without a slow storage scan', async () => {

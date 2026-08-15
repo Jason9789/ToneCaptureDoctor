@@ -76,6 +76,7 @@ describe('Signal Health input flow', () => {
     expect(screen.getByText('로컬 우선 오디오 진단')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Signal Health 시작' })).toBeEnabled();
     expect(window.localStorage.getItem('tone-capture-doctor.locale')).toBe('ko');
+    expect(document.documentElement.lang).toBe('ko');
   });
 
   it('requests local input only after Start and shows actual track settings', async () => {
@@ -158,6 +159,31 @@ describe('Signal Health input flow', () => {
     expect(mediaDevices.getUserMedia).toHaveBeenLastCalledWith({
       audio: expect.objectContaining({ deviceId: { exact: 'built-in' } }),
     });
+  });
+
+  it('keeps the current input connected when switching to a rejected device', async () => {
+    const mediaDevices = navigator.mediaDevices as unknown as ReturnType<typeof createMediaDevices>;
+    const first = createStream('interface-1');
+    mediaDevices.getUserMedia
+      .mockResolvedValueOnce(first.stream)
+      .mockRejectedValueOnce(new DOMException('Device unavailable', 'NotReadableError'));
+
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: 'Start Signal Health' }));
+    await screen.findByRole('combobox', { name: 'Choose an audio input' });
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Choose an audio input' }), {
+      target: { value: 'built-in' },
+    });
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /previous input is still connected/i,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Connected');
+    expect(screen.getByRole('combobox', { name: 'Choose an audio input' })).toHaveValue(
+      'interface-1',
+    );
+    expect(first.track.stop).not.toHaveBeenCalled();
   });
 
   it('stops a late stream when the component unmounts during a pending request', async () => {

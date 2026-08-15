@@ -9,6 +9,11 @@ import {
 
 import type { Messages } from './i18n';
 
+const REFERENCE_LABELS: Record<string, string> = {
+  'internal:audio-core': 'ToneCaptureDoctor analysis engine',
+  'internal:phase7-guidance': 'ToneCaptureDoctor measured guidance',
+};
+
 interface GlossaryPanelProps {
   locale: SupportedLocale;
   messages: Messages['glossary'];
@@ -96,7 +101,10 @@ export function GlossaryPanel({ locale, messages }: GlossaryPanelProps) {
             </div>
           )}
           <small className="glossary-references">
-            {messages.references}: {selected.references.join(', ')}
+            {messages.references}:{' '}
+            {selected.references
+              .map((reference) => REFERENCE_LABELS[reference] ?? reference)
+              .join(', ')}
           </small>
         </div>
       ) : (

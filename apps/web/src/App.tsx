@@ -14,7 +14,14 @@ import {
   requestAudioInput,
   stopAudioStream,
 } from './audioInput';
-import { startAudioAnalysis, type AudioAnalysisSession, stopAudioAnalysis } from './audioAnalysis';
+import {
+  startAudioAnalysis,
+  startDryWetAnalysis,
+  type AudioAnalysisSession,
+  type DryWetAnalysisSession,
+  stopAudioAnalysis,
+  stopDryWetAnalysis,
+} from './audioAnalysis';
 import { startAudioClipCapture, type AudioClipCapture } from './audioClip';
 import {
   getInitialLocale,
@@ -22,10 +29,12 @@ import {
   persistLocale,
   type ConnectionStatus,
   type Locale,
+  type Messages,
 } from './i18n';
 import { SignalVisualizer } from './SignalVisualizer';
 import { SnapshotAudioPlayer } from './SnapshotAudioPlayer';
 import { GlossaryPanel } from './GlossaryPanel';
+import { DryWetDoctorPanel } from './DryWetDoctorPanel';
 import {
   createSessionId,
   deleteSnapshot,
@@ -39,6 +48,7 @@ import {
   LocalStorageError,
   type SnapshotRecord,
 } from './sessionStore';
+import type { DryWetAnalysisResult } from '@tone-capture-doctor/audio-core';
 
 function formatSetting(
   value: boolean | number | undefined,
@@ -71,6 +81,28 @@ function deviceLabel(label: string, index: number, locale: Locale): string {
   return locale === 'ko' ? `오디오 입력 ${index + 1}` : `Audio input ${index + 1}`;
 }
 
+type AppNotice =
+  | { area: 'snapshots'; key: keyof Messages['snapshots'] }
+  | { area: 'compare'; key: keyof Messages['compare'] };
+
+function confidenceLabel(
+  confidence: AudioMetrics['humConfidence'],
+  sampleCount: number,
+  sampleRate: number,
+  messages: Messages['metrics'],
+): string {
+  if (confidence === 'high') {
+    return `${messages.confidence}: ${messages.confidenceHigh}`;
+  }
+  if (confidence === 'medium') {
+    return `${messages.confidence}: ${messages.confidenceMedium}`;
+  }
+  if (confidence === 'low') {
+    return `${messages.confidence}: ${messages.confidenceLow}`;
+  }
+  return sampleCount < sampleRate ? messages.notReady : messages.notDetected;
+}
+
 export function App() {
   const [locale, setLocale] = useState<Locale>(getInitialLocale);
   const [status, setStatus] = useState<ConnectionStatus>('idle');
@@ -79,18 +111,28 @@ export function App() {
   const [analysisStatus, setAnalysisStatus] = useState<'starting' | 'active' | 'unavailable'>(
     'unavailable',
   );
+  const [connectionNotice, setConnectionNotice] = useState<keyof Messages['connection'] | null>(
+    null,
+  );
   const [metrics, setMetrics] = useState<AudioMetrics | null>(null);
   const [analysisNode, setAnalysisNode] = useState<AnalyserNode | null>(null);
+  const [dryWetDryChannelIndex, setDryWetDryChannelIndex] = useState(0);
+  const [dryWetWetChannelIndex, setDryWetWetChannelIndex] = useState(1);
+  const [dryWetResult, setDryWetResult] = useState<DryWetAnalysisResult | null>(null);
+  const [dryWetStatus, setDryWetStatus] = useState<'starting' | 'active' | 'unavailable'>(
+    'unavailable',
+  );
   const [snapshots, setSnapshots] = useState<SnapshotRecord[]>([]);
   const [snapshotLabel, setSnapshotLabel] = useState('');
   const [snapshotNotes, setSnapshotNotes] = useState('');
-  const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
+  const [notice, setNotice] = useState<AppNotice | null>(null);
   const [logSessionId, setLogSessionId] = useState<string | null>(null);
   const [referenceSnapshotId, setReferenceSnapshotId] = useState('');
   const [candidateSnapshotId, setCandidateSnapshotId] = useState('');
   const [comparison, setComparison] = useState<SnapshotComparison | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analysisRef = useRef<AudioAnalysisSession | null>(null);
+  const dryWetAnalysisRef = useRef<DryWetAnalysisSession | null>(null);
   const logWriterRef = useRef<TestLogWriter | null>(null);
   const logWriterStartRef = useRef<Promise<void> | null>(null);
   const clipCaptureRef = useRef<AudioClipCapture | null>(null);
@@ -107,7 +149,16 @@ export function App() {
 
   useEffect(() => {
     localeRef.current = locale;
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = locale;
+    }
   }, [locale]);
+
+  const refreshSnapshots = useCallback(async () => {
+    const nextSnapshots = await listSnapshots();
+    setSnapshots(nextSnapshots);
+    return nextSnapshots;
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -119,13 +170,13 @@ export function App() {
       })
       .catch(() => {
         if (active) {
-          setSnapshotMessage(t.snapshots.error);
+          setNotice({ area: 'snapshots', key: 'error' });
         }
       });
     return () => {
       active = false;
     };
-  }, [t.snapshots.error]);
+  }, []);
 
   const updateStatus = useCallback((nextStatus: ConnectionStatus) => {
     statusRef.current = nextStatus;
@@ -145,6 +196,9 @@ export function App() {
       setSession(nextSession);
       setMetrics(null);
       setAnalysisStatus('starting');
+      setConnectionNotice(null);
+      setDryWetResult(null);
+      setDryWetStatus((nextSession.settings.channelCount ?? 0) >= 2 ? 'starting' : 'unavailable');
       const nextDeviceId = nextSession.selectedDeviceId ?? '';
       selectedDeviceRef.current = nextDeviceId;
       setSelectedDeviceId(nextDeviceId);
@@ -157,6 +211,7 @@ export function App() {
     async (deviceId?: string) => {
       const previousDeviceId = selectedDeviceRef.current;
       const requestGeneration = ++requestGenerationRef.current;
+      setConnectionNotice(null);
       updateStatus('requesting');
 
       try {
@@ -170,10 +225,15 @@ export function App() {
         if (requestGeneration !== requestGenerationRef.current) {
           return;
         }
-        if (error instanceof AudioInputError) {
-          updateStatus(error.code === 'unknown' ? 'error' : error.code);
+        if (streamRef.current) {
+          updateStatus('connected');
+          setConnectionNotice('switchError');
         } else {
-          updateStatus('error');
+          if (error instanceof AudioInputError) {
+            updateStatus(error.code === 'unknown' ? 'error' : error.code);
+          } else {
+            updateStatus('error');
+          }
         }
         setSelectedDeviceId(previousDeviceId);
       }
@@ -191,6 +251,9 @@ export function App() {
     setSession(null);
     setMetrics(null);
     setAnalysisStatus('unavailable');
+    setConnectionNotice(null);
+    setDryWetResult(null);
+    setDryWetStatus('unavailable');
     selectedDeviceRef.current = '';
     setSelectedDeviceId('');
     updateStatus('stopped');
@@ -229,9 +292,7 @@ export function App() {
     });
     logWriterRef.current = writer;
     clipCaptureRef.current = startAudioClipCapture(session.stream);
-    const startPromise = writer
-      .start()
-      .catch(() => setSnapshotMessage(MESSAGES[localeRef.current].snapshots.error));
+    const startPromise = writer.start().catch(() => setNotice({ area: 'snapshots', key: 'error' }));
     logWriterStartRef.current = startPromise;
 
     void startAudioAnalysis(
@@ -281,6 +342,50 @@ export function App() {
   }, [session]);
 
   useEffect(() => {
+    let cancelled = false;
+    const channelCount = session?.settings.channelCount ?? 0;
+    if (!session || channelCount < 2) {
+      return undefined;
+    }
+
+    void startDryWetAnalysis(
+      session.stream,
+      (result) => {
+        if (!cancelled) {
+          setDryWetResult(result);
+          setDryWetStatus('active');
+        }
+      },
+      {
+        dryChannelIndex: dryWetDryChannelIndex,
+        sampleRate: session.settings.sampleRate,
+        wetChannelIndex: dryWetWetChannelIndex,
+      },
+    )
+      .then((nextAnalysis) => {
+        if (cancelled) {
+          void stopDryWetAnalysis(nextAnalysis);
+          return;
+        }
+        dryWetAnalysisRef.current = nextAnalysis;
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setDryWetStatus('unavailable');
+        }
+      });
+
+    return () => {
+      cancelled = true;
+      const currentAnalysis = dryWetAnalysisRef.current;
+      dryWetAnalysisRef.current = null;
+      if (currentAnalysis) {
+        void stopDryWetAnalysis(currentAnalysis);
+      }
+    };
+  }, [dryWetDryChannelIndex, dryWetWetChannelIndex, session]);
+
+  useEffect(() => {
     if (session && logWriterRef.current) {
       logWriterRef.current.append('status', { status });
     }
@@ -297,6 +402,9 @@ export function App() {
       setSession(null);
       setMetrics(null);
       setAnalysisStatus('unavailable');
+      setConnectionNotice(null);
+      setDryWetResult(null);
+      setDryWetStatus('unavailable');
       selectedDeviceRef.current = '';
       setSelectedDeviceId('');
       updateStatus('device-unavailable');
@@ -326,6 +434,9 @@ export function App() {
             setSession(null);
             setMetrics(null);
             setAnalysisStatus('unavailable');
+            setConnectionNotice(null);
+            setDryWetResult(null);
+            setDryWetStatus('unavailable');
             selectedDeviceRef.current = '';
             setSelectedDeviceId('');
             updateStatus('device-unavailable');
@@ -340,6 +451,24 @@ export function App() {
 
   const handleDeviceChange = (deviceId: string) => {
     void connect(deviceId);
+  };
+
+  const handleDryChannelChange = (index: number) => {
+    if (index === dryWetWetChannelIndex) {
+      setDryWetWetChannelIndex(dryWetDryChannelIndex);
+    }
+    setDryWetResult(null);
+    setDryWetStatus('starting');
+    setDryWetDryChannelIndex(index);
+  };
+
+  const handleWetChannelChange = (index: number) => {
+    if (index === dryWetDryChannelIndex) {
+      setDryWetDryChannelIndex(dryWetWetChannelIndex);
+    }
+    setDryWetResult(null);
+    setDryWetStatus('starting');
+    setDryWetWetChannelIndex(index);
   };
 
   const handleLocaleChange = (nextLocale: Locale) => {
@@ -357,7 +486,7 @@ export function App() {
       metrics.analysisFrameStartSample === null ||
       metrics.analysisFrameEndSample === null
     ) {
-      setSnapshotMessage(t.snapshots.analysisNotReady);
+      setNotice({ area: 'snapshots', key: 'analysisNotReady' });
       return;
     }
 
@@ -379,7 +508,9 @@ export function App() {
           clippingCandidate: metrics.clippingCandidate,
           crestFactorDb: metrics.crestFactorDb,
           dominantFrequencyHz: metrics.dominantFrequencyHz,
+          humConfidence: metrics.humConfidence,
           humFrequencyHz: metrics.humFrequencyHz,
+          noiseFloorConfidence: metrics.noiseFloorConfidence,
           noiseFloorDbfs: metrics.noiseFloorDbfs,
           peakDbfs: metrics.peakDbfs,
           rmsDbfs: metrics.rmsDbfs,
@@ -397,18 +528,25 @@ export function App() {
         window: metrics.spectrumWindow,
       };
       await saveSnapshot(snapshot);
-      setSnapshots(await listSnapshots());
+      await refreshSnapshots();
       setSnapshotLabel('');
       setSnapshotNotes('');
-      setSnapshotMessage(audioClip ? t.snapshots.audioClipSaved : t.snapshots.saved);
+      setNotice({ area: 'snapshots', key: audioClip ? 'audioClipSaved' : 'saved' });
     } catch (error) {
-      setSnapshotMessage(
-        error instanceof LocalStorageError && error.code === 'quota'
-          ? t.snapshots.quota
-          : t.snapshots.error,
-      );
+      setNotice({
+        area: 'snapshots',
+        key: error instanceof LocalStorageError && error.code === 'quota' ? 'quota' : 'error',
+      });
     }
-  }, [logSessionId, metrics, session, snapshotLabel, snapshotNotes, snapshots.length, t.snapshots]);
+  }, [
+    logSessionId,
+    metrics,
+    refreshSnapshots,
+    session,
+    snapshotLabel,
+    snapshotNotes,
+    snapshots.length,
+  ]);
 
   const handleDeleteSnapshot = useCallback(
     async (snapshotId: string) => {
@@ -417,21 +555,28 @@ export function App() {
       }
       try {
         await deleteSnapshot(snapshotId);
-        setSnapshots(await listSnapshots());
+        await refreshSnapshots();
+        if (referenceSnapshotId === snapshotId) {
+          setReferenceSnapshotId('');
+          setComparison(null);
+        }
+        if (candidateSnapshotId === snapshotId) {
+          setCandidateSnapshotId('');
+          setComparison(null);
+        }
       } catch (error) {
-        setSnapshotMessage(
-          error instanceof LocalStorageError && error.code === 'quota'
-            ? t.snapshots.quota
-            : t.snapshots.error,
-        );
+        setNotice({
+          area: 'snapshots',
+          key: error instanceof LocalStorageError && error.code === 'quota' ? 'quota' : 'error',
+        });
       }
     },
-    [t.snapshots.deleteConfirm, t.snapshots.error, t.snapshots.quota],
+    [candidateSnapshotId, referenceSnapshotId, refreshSnapshots, t.snapshots.deleteConfirm],
   );
 
   const handleExportLog = useCallback(async () => {
     if (!logSessionId) {
-      setSnapshotMessage(t.snapshots.empty);
+      setNotice({ area: 'snapshots', key: 'empty' });
       return;
     }
     try {
@@ -445,9 +590,9 @@ export function App() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch {
-      setSnapshotMessage(t.snapshots.error);
+      setNotice({ area: 'snapshots', key: 'error' });
     }
-  }, [logSessionId, t.snapshots]);
+  }, [logSessionId]);
 
   const handleExportSnapshots = useCallback(async () => {
     try {
@@ -460,9 +605,9 @@ export function App() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch {
-      setSnapshotMessage(t.snapshots.error);
+      setNotice({ area: 'snapshots', key: 'error' });
     }
-  }, [t.snapshots.error]);
+  }, []);
 
   const handleImportSnapshots = useCallback(
     async (event: ChangeEvent<HTMLInputElement>) => {
@@ -473,13 +618,13 @@ export function App() {
       }
       try {
         await importSnapshots(await file.text());
-        setSnapshots(await listSnapshots());
-        setSnapshotMessage(t.snapshots.imported);
+        await refreshSnapshots();
+        setNotice({ area: 'snapshots', key: 'imported' });
       } catch {
-        setSnapshotMessage(t.snapshots.invalidImport);
+        setNotice({ area: 'snapshots', key: 'invalidImport' });
       }
     },
-    [t.snapshots.imported, t.snapshots.invalidImport],
+    [refreshSnapshots],
   );
 
   const handleCompare = useCallback(() => {
@@ -487,7 +632,7 @@ export function App() {
     const candidate = snapshots.find((snapshot) => snapshot.id === candidateSnapshotId);
     if (!reference || !candidate || reference.id === candidate.id) {
       setComparison(null);
-      setSnapshotMessage(t.compare.selectBoth);
+      setNotice({ area: 'compare', key: 'selectBoth' });
       return;
     }
     try {
@@ -503,12 +648,12 @@ export function App() {
           { ...candidate, spectrumUnit: candidate.spectrumUnit },
         ),
       );
-      setSnapshotMessage(null);
+      setNotice(null);
     } catch {
       setComparison(null);
-      setSnapshotMessage(t.compare.empty);
+      setNotice({ area: 'compare', key: 'incompatible' });
     }
-  }, [candidateSnapshotId, referenceSnapshotId, snapshots, t.compare]);
+  }, [candidateSnapshotId, referenceSnapshotId, snapshots]);
 
   const isRequesting = status === 'requesting';
   const hasSession = session !== null;
@@ -566,7 +711,6 @@ export function App() {
               <p className="eyebrow">{t.input.eyebrow}</p>
               <h3>{t.input.ready}</h3>
             </div>
-            <span className="panel-index">01</span>
           </div>
           <p>{t.input.description}</p>
           <button
@@ -600,6 +744,11 @@ export function App() {
           ) : (
             <p data-testid="device-empty">
               {hasSession ? t.connection.noLabelledInputs : t.connection.startToList}
+            </p>
+          )}
+          {connectionNotice && (
+            <p className="error-message" role="alert">
+              {t.connection[connectionNotice]}
             </p>
           )}
           {isError && (
@@ -688,14 +837,16 @@ export function App() {
           )}
         </article>
 
-        <article className="panel metrics-panel" aria-live="polite">
+        <article className="panel metrics-panel">
           <p className="eyebrow">{t.metrics.eyebrow}</p>
           <h3>{t.metrics.title}</h3>
           {!session ? (
             <p>{t.metrics.empty}</p>
           ) : metrics ? (
             <>
-              <p className="analysis-state analysis-state-active">{t.analysis.active}</p>
+              <p className="analysis-state analysis-state-active" aria-live="polite">
+                {t.analysis.active}
+              </p>
               <dl className="settings-list metrics-list">
                 <div>
                   <dt>{t.metrics.peak}</dt>
@@ -707,7 +858,17 @@ export function App() {
                 </div>
                 <div>
                   <dt>{t.metrics.noiseFloor}</dt>
-                  <dd>{formatDbfs(metrics.noiseFloorDbfs)}</dd>
+                  <dd className="metric-value">
+                    <span>{formatDbfs(metrics.noiseFloorDbfs)}</span>
+                    <small>
+                      {confidenceLabel(
+                        metrics.noiseFloorConfidence,
+                        metrics.sampleCount,
+                        metrics.sampleRate,
+                        t.metrics,
+                      )}
+                    </small>
+                  </dd>
                 </div>
                 <div>
                   <dt>{t.metrics.dominantFrequency}</dt>
@@ -715,7 +876,17 @@ export function App() {
                 </div>
                 <div>
                   <dt>{t.metrics.humCandidate}</dt>
-                  <dd>{metrics.humFrequencyHz ? `${metrics.humFrequencyHz} Hz` : '—'}</dd>
+                  <dd className="metric-value">
+                    <span>{metrics.humFrequencyHz ? `${metrics.humFrequencyHz} Hz` : '—'}</span>
+                    <small>
+                      {confidenceLabel(
+                        metrics.humConfidence,
+                        metrics.sampleCount,
+                        metrics.sampleRate,
+                        t.metrics,
+                      )}
+                    </small>
+                  </dd>
                 </div>
                 <div>
                   <dt>{t.metrics.clippingCandidate}</dt>
@@ -737,7 +908,7 @@ export function App() {
           )}
         </article>
 
-        <article className="panel guidance-panel" aria-live="polite">
+        <article className="panel guidance-panel">
           <p className="eyebrow">{t.guidance.eyebrow}</p>
           <h3>{t.guidance.title}</h3>
           {guidance.length === 0 ? (
@@ -790,14 +961,27 @@ export function App() {
         </article>
       </section>
 
+      <section className="phase8-grid" aria-label={t.dryWet.title}>
+        <DryWetDoctorPanel
+          channelCount={session?.settings.channelCount}
+          dryChannelIndex={dryWetDryChannelIndex}
+          locale={locale}
+          messages={t.dryWet}
+          onDryChannelChange={handleDryChannelChange}
+          onWetChannelChange={handleWetChannelChange}
+          result={dryWetResult}
+          status={dryWetStatus}
+          wetChannelIndex={dryWetWetChannelIndex}
+        />
+      </section>
+
       <section className="phase5-grid" aria-label={t.snapshots.title}>
         <article className="panel visualizer-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">{t.visualizer.waveform}</p>
-              <h3>{t.metrics.title}</h3>
+              <h3>{t.visualizer.title}</h3>
             </div>
-            <span className="panel-index">05</span>
           </div>
           <SignalVisualizer
             analyser={analysisNode}
@@ -1000,9 +1184,9 @@ export function App() {
               <p className="analysis-state">{t.compare.empty}</p>
             )}
           </div>
-          {snapshotMessage && (
-            <p className="snapshot-message" role="status">
-              {snapshotMessage}
+          {notice && (
+            <p className="snapshot-message" role="status" aria-live="polite">
+              {notice.area === 'snapshots' ? t.snapshots[notice.key] : t.compare[notice.key]}
             </p>
           )}
           {snapshots.length === 0 ? (

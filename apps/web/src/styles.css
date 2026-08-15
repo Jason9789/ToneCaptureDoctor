@@ -37,7 +37,19 @@ button {
 
 button:disabled {
   cursor: not-allowed;
-  opacity: 0.45;
+  border: 1px solid rgba(155, 228, 193, 0.16);
+  color: #7f978b;
+  background: rgba(44, 72, 62, 0.7);
+  opacity: 1;
+}
+
+button:focus-visible,
+select:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+.file-button:focus-within {
+  outline: 3px solid #e7b979;
+  outline-offset: 3px;
 }
 
 .app-shell {
@@ -56,7 +68,7 @@ button:disabled {
 }
 
 .app-header {
-  padding-bottom: 4rem;
+  padding-bottom: 3rem;
 }
 
 .header-actions {
@@ -285,12 +297,13 @@ textarea {
 }
 
 .metrics-panel {
-  min-height: 220px;
+  grid-column: 1 / -1;
+  min-height: 0;
 }
 
 .guidance-panel {
   grid-column: 1 / -1;
-  min-height: 240px;
+  min-height: 0;
 }
 
 .guidance-list {
@@ -398,8 +411,80 @@ textarea {
   margin-top: 1rem;
 }
 
+.phase8-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.dry-wet-panel {
+  min-width: 0;
+}
+
+.dry-wet-channel-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.8rem;
+  margin-top: 1.1rem;
+}
+
+.dry-wet-metrics {
+  margin-top: 1rem;
+}
+
+.dry-wet-subsection {
+  display: grid;
+  gap: 0.65rem;
+  margin-top: 1.2rem;
+  border-top: 1px solid rgba(155, 228, 193, 0.12);
+  padding-top: 1rem;
+}
+
+.dry-wet-subsection > strong {
+  color: #d4e6dd;
+  font-size: 0.82rem;
+}
+
+.dry-wet-table {
+  display: grid;
+  gap: 0.35rem;
+  color: #a7bcb3;
+  font-size: 0.78rem;
+}
+
+.dry-wet-table-row {
+  display: grid;
+  grid-template-columns: minmax(4rem, 1fr) repeat(2, minmax(4rem, 0.8fr));
+  gap: 0.6rem;
+  border-bottom: 1px solid rgba(155, 228, 193, 0.1);
+  padding: 0.35rem 0;
+}
+
+.dry-wet-table-heading {
+  color: #7fa394;
+  font-size: 0.7rem;
+  font-weight: 700;
+}
+
+.dry-wet-table-row span:not(:first-child) {
+  text-align: right;
+}
+
+.dry-wet-safety {
+  margin: 1.2rem 0 0;
+  border-left: 2px solid rgba(239, 142, 132, 0.55);
+  padding-left: 0.8rem;
+  color: #f2ca8a;
+  font-size: 0.82rem;
+}
+
+.dry-wet-safety strong {
+  color: #ffb2a9;
+}
+
 .glossary-panel {
-  min-height: 360px;
+  min-height: 0;
 }
 
 .glossary-controls {
@@ -480,7 +565,7 @@ textarea {
 
 .visualizer-panel,
 .snapshots-panel {
-  min-height: 420px;
+  min-height: 0;
 }
 
 .visualizer-grid {
@@ -561,11 +646,29 @@ canvas {
   background: transparent;
 }
 
+.secondary-button {
+  border-radius: 999px;
+  padding: 0.85rem 1.25rem;
+}
+
 .file-button {
   display: inline-flex;
   align-items: center;
   cursor: pointer;
   font-weight: 700;
+}
+
+.metric-value {
+  display: grid;
+  justify-items: end;
+  gap: 0.15rem;
+}
+
+.metric-value small {
+  color: #7fa394;
+  font-size: 0.7rem;
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .file-button input {
@@ -743,10 +846,12 @@ canvas {
   .header-actions {
     width: 100%;
     justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .hero,
   .dashboard-grid,
+  .phase8-grid,
   .phase5-grid,
   .glossary-controls,
   .guidance-columns,
@@ -756,5 +861,23 @@ canvas {
 
   .panel-primary {
     grid-row: auto;
+  }
+
+  .dry-wet-channel-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 400px) {
+  .header-actions {
+    align-items: flex-start;
+  }
+
+  .status-pill {
+    white-space: normal;
+  }
+
+  .language-field select {
+    min-width: 0;
   }
 }

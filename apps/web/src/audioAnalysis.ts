@@ -1,4 +1,8 @@
-import { AUDIO_WORKLET_PROCESSOR_NAME, type AudioMetrics } from '@tone-capture-doctor/audio-core';
+import {
+  AUDIO_WORKLET_PROCESSOR_NAME,
+  type AudioMetrics,
+  type DryWetAnalysisResult,
+} from '@tone-capture-doctor/audio-core';
 
 export type AudioAnalysisStatus = 'starting' | 'active' | 'unavailable';
 
@@ -20,10 +24,25 @@ export interface AudioAnalysisSession {
   source: MediaStreamAudioSourceNode;
 }
 
+export interface DryWetAnalysisSession {
+  context: AudioContext;
+  muteGain: GainNode;
+  node: AudioWorkletNode;
+  source: MediaStreamAudioSourceNode;
+}
+
 export type AudioMetricsHandler = (metrics: AudioMetrics) => void;
+export type DryWetAnalysisHandler = (result: DryWetAnalysisResult) => void;
 
 export interface AudioAnalysisOptions {
   sampleRate?: number;
+}
+
+export interface DryWetAnalysisOptions {
+  dryChannelIndex: number;
+  frameSize?: number;
+  sampleRate?: number;
+  wetChannelIndex: number;
 }
 
 function hasAudioWorkletSupport(): boolean {
@@ -92,11 +111,91 @@ export async function startAudioAnalysis(
   }
 }
 
+export async function startDryWetAnalysis(
+  stream: MediaStream,
+  onResult: DryWetAnalysisHandler,
+  options: DryWetAnalysisOptions,
+): Promise<DryWetAnalysisSession> {
+  if (!hasAudioWorkletSupport()) {
+    throw new AudioAnalysisError(
+      'unavailable',
+      'This browser does not support local dry/wet measurement.',
+    );
+  }
+  if (
+    !Number.isInteger(options.dryChannelIndex) ||
+    options.dryChannelIndex < 0 ||
+    !Number.isInteger(options.wetChannelIndex) ||
+    options.wetChannelIndex < 0 ||
+    options.dryChannelIndex === options.wetChannelIndex
+  ) {
+    throw new AudioAnalysisError('unavailable', 'Dry and wet channels must be different inputs.');
+  }
+
+  const context = new AudioContext(
+    options.sampleRate ? { sampleRate: options.sampleRate } : undefined,
+  );
+  let source: MediaStreamAudioSourceNode | undefined;
+  let node: AudioWorkletNode | undefined;
+  let muteGain: GainNode | undefined;
+
+  try {
+    await context.audioWorklet.addModule(new URL('./dryWetAnalyzer.worklet.ts', import.meta.url));
+    source = context.createMediaStreamSource(stream);
+    node = new AudioWorkletNode(context, 'tone-capture-doctor-dry-wet-analyzer', {
+      channelCount: Math.max(options.dryChannelIndex, options.wetChannelIndex) + 1,
+      channelCountMode: 'explicit',
+      numberOfInputs: 1,
+      numberOfOutputs: 1,
+      processorOptions: {
+        dryChannelIndex: options.dryChannelIndex,
+        frameSize: options.frameSize ?? 4_096,
+        sampleRate: context.sampleRate,
+        wetChannelIndex: options.wetChannelIndex,
+      },
+    });
+    muteGain = context.createGain();
+    muteGain.gain.value = 0;
+
+    node.port.onmessage = (
+      event: MessageEvent<{ kind: string; result?: DryWetAnalysisResult }>,
+    ) => {
+      if (event.data.kind === 'result' && event.data.result) {
+        onResult(event.data.result);
+      }
+    };
+    source.connect(node);
+    node.connect(muteGain);
+    muteGain.connect(context.destination);
+    await context.resume();
+
+    return { context, muteGain, node, source };
+  } catch (error) {
+    source?.disconnect();
+    node?.disconnect();
+    muteGain?.disconnect();
+    await context.close().catch(() => undefined);
+    throw new AudioAnalysisError(
+      'unavailable',
+      'The browser could not start dry/wet measurement. The input connection can remain active.',
+      { cause: error },
+    );
+  }
+}
+
 export async function stopAudioAnalysis(session: AudioAnalysisSession): Promise<void> {
   session.node.port.onmessage = null;
   session.source.disconnect();
   session.node.disconnect();
   session.analyser.disconnect();
+  session.muteGain.disconnect();
+  await session.context.close().catch(() => undefined);
+}
+
+export async function stopDryWetAnalysis(session: DryWetAnalysisSession): Promise<void> {
+  session.node.port.onmessage = null;
+  session.source.disconnect();
+  session.node.disconnect();
   session.muteGain.disconnect();
   await session.context.close().catch(() => undefined);
 }
