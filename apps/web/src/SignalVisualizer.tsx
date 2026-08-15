@@ -2,16 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 
 import type { Locale } from './i18n';
 
-export interface SignalFrameData {
-  spectrum: number[];
-  waveform: number[];
-}
-
 interface SignalVisualizerProps {
   analyser: AnalyserNode | null;
   locale: Locale;
   noSignalLabel: string;
-  onFrameData?: (data: SignalFrameData) => void;
   spectrumLabel: string;
   spectrogramLabel: string;
   timeWindowLabel: string;
@@ -154,7 +148,6 @@ export function SignalVisualizer({
   analyser,
   locale,
   noSignalLabel,
-  onFrameData,
   spectrumLabel,
   spectrogramLabel,
   timeWindowLabel,
@@ -163,12 +156,7 @@ export function SignalVisualizer({
   const waveformCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const spectrumCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const spectrogramCanvasRef = useRef<HTMLCanvasElement | null>(null);
-  const callbackRef = useRef(onFrameData);
   const [timeWindowZoom, setTimeWindowZoom] = useState(1);
-
-  useEffect(() => {
-    callbackRef.current = onFrameData;
-  }, [onFrameData]);
 
   useEffect(() => {
     if (!analyser) {
@@ -206,17 +194,13 @@ export function SignalVisualizer({
       const zoomedWaveform = waveformData.subarray(
         Math.max(0, waveformData.length - Math.floor(waveformData.length / timeWindowZoom)),
       );
-      const waveform = drawWaveform(waveformContext, zoomedWaveform);
+      drawWaveform(waveformContext, zoomedWaveform);
       const spectrum = drawSpectrum(spectrumContext, spectrumData, smoothedSpectrum, peakHold);
       spectrogramHistory.push(downsample(spectrum, 128));
       if (spectrogramHistory.length > 80) {
         spectrogramHistory.shift();
       }
       drawSpectrogram(spectrogramContext, spectrogramHistory);
-      callbackRef.current?.({
-        spectrum: downsample(spectrum, 128),
-        waveform: downsample(waveform, 256),
-      });
       frameHandle = window.requestAnimationFrame(renderFrame);
     };
 

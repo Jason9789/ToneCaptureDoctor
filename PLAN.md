@@ -119,11 +119,15 @@ IndexedDB / local export
 |---|---:|---|
 | 기본 샘플레이트 | 장치 native, 안내는 44.1/48kHz | 96kHz는 성능 테스트 후 |
 | FFT | 2048, Hann window | 저역 해상도 요구 시 4096 옵션 |
+| FFT hop / 평균 | 1024 samples / 최근 4 periodogram | 실제 장비 CPU profile 후 조정 |
 | UI update | 30~60Hz | CPU profile 후 조정 |
 | peak meter | sample peak | true peak는 후속 명시 기능 |
 | loudness | RMS/short window 우선 | LUFS는 phrase/file 분석에서 추가 |
 | 채널 | mono/stereo | 2채널 dry/wet이 MVP 상한 |
 | frequency bands | log/1/3-octave 보조 | raw bin을 사용자 판정에 직접 사용하지 않음 |
+
+분석 알고리즘 `0.2.0`의 단위, 시간 좌표, hum/noise 추정, 스냅샷 호환성 계약은
+[`docs/analysis-engine.md`](docs/analysis-engine.md)에 기록한다.
 
 ## 4. 저장소 초기 구조
 

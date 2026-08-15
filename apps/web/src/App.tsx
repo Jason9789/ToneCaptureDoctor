@@ -23,7 +23,7 @@ import {
   type ConnectionStatus,
   type Locale,
 } from './i18n';
-import { SignalVisualizer, type SignalFrameData } from './SignalVisualizer';
+import { SignalVisualizer } from './SignalVisualizer';
 import { SnapshotAudioPlayer } from './SnapshotAudioPlayer';
 import { GlossaryPanel } from './GlossaryPanel';
 import {
@@ -94,7 +94,6 @@ export function App() {
   const logWriterRef = useRef<TestLogWriter | null>(null);
   const logWriterStartRef = useRef<Promise<void> | null>(null);
   const clipCaptureRef = useRef<AudioClipCapture | null>(null);
-  const visualDataRef = useRef<SignalFrameData>({ spectrum: [], waveform: [] });
   const statusRef = useRef(status);
   const localeRef = useRef(locale);
   const pendingLogSessionIdRef = useRef<string | null>(null);
@@ -348,12 +347,17 @@ export function App() {
     persistLocale(nextLocale);
   };
 
-  const handleFrameData = useCallback((data: SignalFrameData) => {
-    visualDataRef.current = data;
-  }, []);
-
   const handleSaveSnapshot = useCallback(async () => {
     if (!session || !metrics) {
+      return;
+    }
+    if (
+      !metrics.analysisWaveform ||
+      !metrics.spectrumPower ||
+      metrics.analysisFrameStartSample === null ||
+      metrics.analysisFrameEndSample === null
+    ) {
+      setSnapshotMessage(t.snapshots.analysisNotReady);
       return;
     }
 
@@ -364,8 +368,8 @@ export function App() {
         ...(audioClip ? { audioClip } : {}),
         channelCount: session.settings.channelCount ?? metrics.channelCount,
         createdAt: new Date().toISOString(),
-        endSample: metrics.sampleCount,
-        fftSize: 2048,
+        endSample: metrics.analysisFrameEndSample,
+        fftSize: metrics.spectrumFftSize,
         id: `snapshot-${createSessionId()}`,
         inputDeviceLabel: session.devices.find(
           (device) => device.deviceId === session.selectedDeviceId,
@@ -386,10 +390,11 @@ export function App() {
         sampleRate: metrics.sampleRate,
         schemaVersion: SNAPSHOT_SCHEMA_VERSION,
         sessionId: logSessionId ?? 'no-session',
-        spectrum: visualDataRef.current.spectrum,
-        startSample: Math.max(0, metrics.sampleCount - 2048),
-        waveform: visualDataRef.current.waveform,
-        window: 'hann',
+        spectrum: Array.from(metrics.spectrumPower),
+        spectrumUnit: 'power-per-bin',
+        startSample: metrics.analysisFrameStartSample,
+        waveform: Array.from(metrics.analysisWaveform),
+        window: metrics.spectrumWindow,
       };
       await saveSnapshot(snapshot);
       setSnapshots(await listSnapshots());
@@ -486,7 +491,18 @@ export function App() {
       return;
     }
     try {
-      setComparison(compareSnapshots(reference, candidate));
+      if (
+        reference.spectrumUnit !== 'power-per-bin' ||
+        candidate.spectrumUnit !== 'power-per-bin'
+      ) {
+        throw new Error('Legacy snapshots do not include a comparable calibrated spectrum.');
+      }
+      setComparison(
+        compareSnapshots(
+          { ...reference, spectrumUnit: reference.spectrumUnit },
+          { ...candidate, spectrumUnit: candidate.spectrumUnit },
+        ),
+      );
       setSnapshotMessage(null);
     } catch {
       setComparison(null);
@@ -787,7 +803,6 @@ export function App() {
             analyser={analysisNode}
             locale={locale}
             noSignalLabel={t.visualizer.noSignal}
-            onFrameData={handleFrameData}
             spectrumLabel={t.visualizer.spectrum}
             spectrogramLabel={t.visualizer.spectrogram}
             timeWindowLabel={t.visualizer.timeWindow}
@@ -819,7 +834,7 @@ export function App() {
             <div className="snapshot-actions">
               <button
                 type="button"
-                disabled={!session || !metrics}
+                disabled={!session || !metrics?.analysisWaveform || !metrics.spectrumPower}
                 onClick={() => void handleSaveSnapshot()}
               >
                 {t.snapshots.save}

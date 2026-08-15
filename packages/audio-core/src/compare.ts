@@ -14,6 +14,7 @@ export interface ComparisonInput {
   metrics: ComparisonMetrics;
   sampleRate: number;
   spectrum: readonly number[];
+  spectrumUnit: 'power-per-bin';
   waveform: readonly number[];
 }
 
@@ -82,21 +83,49 @@ function linearToDb(value: number): number {
 }
 
 function normalizedSpectrum(spectrum: readonly number[]): number[] {
-  const peak = Math.max(...spectrum.map((value) => Math.max(0, value)), 0);
-  return peak > 0 ? spectrum.map((value) => Math.max(0, value) / peak) : spectrum.map(() => 0);
+  const totalPower = spectrum.reduce((sum, value) => sum + value, 0);
+  return totalPower > 0 ? spectrum.map((value) => value / totalPower) : spectrum.map(() => 0);
 }
 
-function bandIndex(frequencyHz: number, sampleRate: number, spectrumLength: number): number {
-  const nyquist = sampleRate / 2;
-  return Math.max(
-    0,
-    Math.min(spectrumLength, Math.floor((frequencyHz / nyquist) * spectrumLength)),
-  );
+function powerRatioToDb(candidatePower: number, referencePower: number): number {
+  if (candidatePower > 0 && referencePower > 0) {
+    return 10 * Math.log10(candidatePower / referencePower);
+  }
+  return 10 * Math.log10((candidatePower + EPSILON) / (referencePower + EPSILON));
 }
 
-function averageRange(values: readonly number[], start: number, end: number): number {
-  const selected = values.slice(Math.min(start, values.length), Math.min(end, values.length));
-  return mean(selected);
+function bandIndex(frequencyHz: number, binHz: number, spectrumLength: number): number {
+  return Math.max(0, Math.min(spectrumLength, Math.ceil(frequencyHz / binHz)));
+}
+
+function sumRange(values: readonly number[], start: number, end: number): number {
+  let sum = 0;
+  for (
+    let index = Math.min(start, values.length);
+    index < Math.min(end, values.length);
+    index += 1
+  ) {
+    sum += values[index] ?? 0;
+  }
+  return sum;
+}
+
+function validateComparisonInput(input: ComparisonInput, role: 'candidate' | 'reference'): void {
+  if (input.spectrumUnit !== 'power-per-bin') {
+    throw new RangeError(`${role} spectrumUnit must be power-per-bin.`);
+  }
+  if (!Number.isInteger(input.fftSize) || input.fftSize <= 0 || input.fftSize % 2 !== 0) {
+    throw new RangeError(`${role} fftSize must be a positive even integer.`);
+  }
+  const expectedSpectrumLength = input.fftSize / 2 + 1;
+  if (input.spectrum.length !== expectedSpectrumLength) {
+    throw new RangeError(
+      `${role} spectrum must contain ${expectedSpectrumLength} one-sided power bins.`,
+    );
+  }
+  if (input.spectrum.some((value) => !Number.isFinite(value) || value < 0)) {
+    throw new RangeError(`${role} spectrum power values must be finite and non-negative.`);
+  }
 }
 
 function calculateCorrelation(
@@ -183,6 +212,14 @@ export function compareSnapshots(
   candidate: ComparisonInput,
   options: { maxLagSamples?: number } = {},
 ): SnapshotComparison {
+  validateComparisonInput(reference, 'reference');
+  validateComparisonInput(candidate, 'candidate');
+  if (reference.sampleRate !== candidate.sampleRate) {
+    throw new RangeError('Snapshot sample rates must match for comparison.');
+  }
+  if (reference.fftSize !== candidate.fftSize) {
+    throw new RangeError('Snapshot FFT sizes must match for comparison.');
+  }
   if (reference.waveform.length === 0 || candidate.waveform.length === 0) {
     throw new RangeError('Snapshot waveforms are required for comparison.');
   }
@@ -206,7 +243,7 @@ export function compareSnapshots(
   );
   const referenceSpectrum = normalizedSpectrum(reference.spectrum);
   const candidateSpectrum = normalizedSpectrum(candidate.spectrum);
-  const spectrumLength = Math.min(referenceSpectrum.length, candidateSpectrum.length);
+  const spectrumLength = referenceSpectrum.length;
   const spectrumMeanAbsoluteDelta =
     spectrumLength === 0
       ? 0
@@ -215,22 +252,23 @@ export function compareSnapshots(
             Math.abs((referenceSpectrum[index] ?? 0) - (candidateSpectrum[index] ?? 0)),
           ),
         );
+  const binHz = reference.sampleRate / reference.fftSize;
   const frequencyBands = DEFAULT_FREQUENCY_BANDS.map((band) => {
-    const referenceStart = bandIndex(band.minimumHz, reference.sampleRate, spectrumLength);
-    const referenceEnd = bandIndex(band.maximumHz, reference.sampleRate, spectrumLength);
-    const referenceLevel = averageRange(
+    const referenceStart = bandIndex(band.minimumHz, binHz, spectrumLength);
+    const referenceEnd = bandIndex(band.maximumHz, binHz, spectrumLength);
+    const referenceLevel = sumRange(
       referenceSpectrum,
       referenceStart,
       Math.max(referenceEnd, referenceStart + 1),
     );
-    const candidateLevel = averageRange(
+    const candidateLevel = sumRange(
       candidateSpectrum,
       referenceStart,
       Math.max(referenceEnd, referenceStart + 1),
     );
     return {
       candidateLevel,
-      deltaDb: 20 * Math.log10((candidateLevel + EPSILON) / (referenceLevel + EPSILON)),
+      deltaDb: powerRatioToDb(candidateLevel, referenceLevel),
       label: band.label,
       maximumHz: band.maximumHz,
       minimumHz: band.minimumHz,
@@ -288,6 +326,7 @@ export function summarizeComparisons(
   const waveformDeltas = comparisons.map((comparison) => comparison.waveformRmsDelta);
   const spectrumDeltas = comparisons.map((comparison) => comparison.spectrumMeanAbsoluteDelta);
   const waveformMedian = median(waveformDeltas);
+  const waveformMean = mean(waveformDeltas);
   return {
     count: comparisons.length,
     medianSpectrumMeanAbsoluteDelta: median(spectrumDeltas),
@@ -295,6 +334,6 @@ export function summarizeComparisons(
     varianceWaveformRmsDelta:
       comparisons.length === 0
         ? 0
-        : mean(waveformDeltas.map((value) => (value - waveformMedian) ** 2)),
+        : mean(waveformDeltas.map((value) => (value - waveformMean) ** 2)),
   };
 }

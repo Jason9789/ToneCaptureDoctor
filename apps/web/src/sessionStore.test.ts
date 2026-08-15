@@ -26,20 +26,33 @@ describe('local test session storage', () => {
     await writer.start();
     writer.appendMetrics({
       algorithmVersion: '0.1.0',
+      analysisFrameEndSample: 128,
+      analysisFrameStartSample: 0,
+      analysisWaveform: new Float32Array(128),
+      audioTimeSeconds: 128 / 48_000,
       channelCount: 2,
       clippedSampleCount: 0,
       clippingCandidate: false,
       crestFactorDb: 3,
       dominantFrequencyHz: 440,
       frameSampleCount: 128,
+      frequencyBands: [],
+      humConfidence: null,
       humFrequencyHz: null,
+      noiseFloorConfidence: 'medium',
       noiseFloorDbfs: -60,
       peakDbfs: -6,
       peakLinear: 0.5,
+      reportEndSample: 128,
+      reportStartSample: 0,
       rmsDbfs: -12,
       rmsLinear: 0.25,
       sampleCount: 128,
       sampleRate: 48_000,
+      spectrumBinHz: 48_000 / 2_048,
+      spectrumFftSize: 2_048,
+      spectrumPower: new Float64Array(1_025),
+      spectrumWindow: 'hann',
     });
     await writer.finish('stopped');
 
@@ -80,9 +93,10 @@ describe('local test session storage', () => {
       },
       notes: 'fixture',
       sampleRate: 48_000,
-      schemaVersion: 1,
+      schemaVersion: 2,
       sessionId: createSessionId(),
-      spectrum: [0.2, 0.4],
+      spectrum: Array.from({ length: 1_025 }, (_, index) => (index === 20 ? 1 : 0)),
+      spectrumUnit: 'power-per-bin',
       startSample: 0,
       waveform: [0, 0.5, -0.5],
       window: 'hann',
@@ -128,9 +142,10 @@ describe('local test session storage', () => {
           },
           notes: '',
           sampleRate: 48_000,
-          schemaVersion: 1,
+          schemaVersion: 2,
           sessionId: createSessionId(),
-          spectrum: [],
+          spectrum: Array.from({ length: 1_025 }, () => 0),
+          spectrumUnit: 'power-per-bin',
           startSample: index,
           waveform: [],
           window: 'hann',
@@ -142,5 +157,26 @@ describe('local test session storage', () => {
       100,
     );
     expect(performance.now() - startedAt).toBeLessThan(1_000);
+  });
+
+  it('rejects a current snapshot with an ambiguous or malformed spectrum', async () => {
+    const invalid = JSON.stringify({
+      schemaVersion: 2,
+      snapshots: [
+        {
+          createdAt: new Date().toISOString(),
+          fftSize: 2_048,
+          id: 'invalid-spectrum',
+          label: 'invalid',
+          sampleRate: 48_000,
+          schemaVersion: 2,
+          spectrum: [0.1, 0.2],
+          spectrumUnit: 'magnitude',
+          waveform: [0, 0.1],
+        },
+      ],
+    });
+
+    await expect(importSnapshots(invalid)).rejects.toThrow(/calibrated spectrum/i);
   });
 });

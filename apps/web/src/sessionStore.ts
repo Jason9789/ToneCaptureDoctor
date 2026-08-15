@@ -1,6 +1,6 @@
 import type { AudioMetrics } from '@tone-capture-doctor/audio-core';
 
-export const SNAPSHOT_SCHEMA_VERSION = 1;
+export const SNAPSHOT_SCHEMA_VERSION = 2;
 export const TEST_LOG_SCHEMA_VERSION = 1;
 
 export type LocalStorageErrorCode = 'quota' | 'unavailable' | 'unknown';
@@ -42,6 +42,8 @@ export interface SnapshotRecord {
   schemaVersion: number;
   sessionId: string;
   spectrum: number[];
+  /** Missing only on legacy schema-v1 snapshots, which cannot be compared safely. */
+  spectrumUnit?: 'power-per-bin';
   startSample: number;
   waveform: number[];
   window: 'hann';
@@ -332,9 +334,14 @@ export class TestLogWriter {
       clippingCandidate: metrics.clippingCandidate,
       crestFactorDb: metrics.crestFactorDb,
       dominantFrequencyHz: metrics.dominantFrequencyHz,
+      humConfidence: metrics.humConfidence,
       humFrequencyHz: metrics.humFrequencyHz,
+      noiseFloorConfidence: metrics.noiseFloorConfidence,
       noiseFloorDbfs: metrics.noiseFloorDbfs,
+      audioTimeSeconds: metrics.audioTimeSeconds,
       peakDbfs: metrics.peakDbfs,
+      reportEndSample: metrics.reportEndSample,
+      reportStartSample: metrics.reportStartSample,
       rmsDbfs: metrics.rmsDbfs,
       sampleCount: metrics.sampleCount,
       sampleRate: metrics.sampleRate,
@@ -430,10 +437,29 @@ export async function importSnapshots(serialized: string): Promise<number> {
       typeof entry.label !== 'string' ||
       typeof entry.createdAt !== 'string' ||
       typeof entry.sampleRate !== 'number' ||
+      !Number.isFinite(entry.sampleRate) ||
+      entry.sampleRate <= 0 ||
       !Array.isArray(entry.waveform) ||
-      !Array.isArray(entry.spectrum)
+      entry.waveform.some((value) => typeof value !== 'number' || !Number.isFinite(value)) ||
+      !Array.isArray(entry.spectrum) ||
+      entry.spectrum.some(
+        (value) => typeof value !== 'number' || !Number.isFinite(value) || value < 0,
+      )
     ) {
       throw new Error('The snapshot file contains an incomplete record.');
+    }
+    if (
+      entry.schemaVersion === SNAPSHOT_SCHEMA_VERSION &&
+      (entry.spectrumUnit !== 'power-per-bin' ||
+        !Number.isInteger(entry.fftSize) ||
+        entry.fftSize === undefined ||
+        entry.fftSize <= 0 ||
+        entry.spectrum.length !== entry.fftSize / 2 + 1)
+    ) {
+      throw new Error('The snapshot file contains an unsupported calibrated spectrum.');
+    }
+    if (typeof entry.schemaVersion === 'number' && entry.schemaVersion > SNAPSHOT_SCHEMA_VERSION) {
+      throw new Error('The snapshot file uses a newer unsupported schema.');
     }
 
     const { audioClipBase64, audioClipType, ...metadata } = entry;

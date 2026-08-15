@@ -55,6 +55,7 @@ export interface Messages {
     quota: string;
     label: string;
     notes: string;
+    analysisNotReady: string;
     pauseClip: string;
     playClip: string;
     clipEnd: string;
@@ -210,6 +211,7 @@ export const MESSAGES: Record<Locale, Messages> = {
       quota: 'Local storage is full. Export your snapshots and remove older data before retrying.',
       label: 'Snapshot label',
       notes: 'Notes about this test',
+      analysisNotReady: 'Wait for calibrated waveform and spectrum analysis before saving.',
       pauseClip: 'Pause clip',
       playClip: 'Play selected clip',
       clipEnd: 'Selection end',
@@ -418,6 +420,7 @@ export const MESSAGES: Record<Locale, Messages> = {
         '로컬 저장 공간이 가득 찼습니다. 스냅샷을 내보내고 오래된 데이터를 삭제한 뒤 다시 시도하세요.',
       label: '스냅샷 이름',
       notes: '테스트 메모',
+      analysisNotReady: '보정된 파형과 스펙트럼 분석이 준비될 때까지 기다려 주세요.',
       pauseClip: '클립 일시정지',
       playClip: '선택 구간 재생',
       clipEnd: '선택 끝',

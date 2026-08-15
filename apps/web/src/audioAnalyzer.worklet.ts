@@ -1,4 +1,8 @@
-import { createAudioAnalyzer, type AudioChannelData } from '@tone-capture-doctor/audio-core';
+import {
+  createAudioAnalyzer,
+  createAudioMetricsAccumulator,
+  type AudioChannelData,
+} from '@tone-capture-doctor/audio-core';
 
 declare const currentTime: number;
 
@@ -27,6 +31,7 @@ declare function registerProcessor(
 
 class SignalAnalyzerProcessor extends AudioWorkletProcessor {
   private readonly analyzer;
+  private readonly reportAccumulator = createAudioMetricsAccumulator();
   private lastPostedAt = -Infinity;
 
   constructor(options?: WorkletProcessorOptions) {
@@ -41,9 +46,13 @@ class SignalAnalyzerProcessor extends AudioWorkletProcessor {
     const channels = (inputs[0] ?? []) as AudioChannelData;
     if (channels.length > 0 && channels[0]?.length) {
       const metrics = this.analyzer.pushFrame(channels);
+      this.reportAccumulator.push(metrics);
       if (currentTime - this.lastPostedAt >= 1 / 30) {
         this.lastPostedAt = currentTime;
-        this.port.postMessage({ ...metrics, timestampSeconds: currentTime });
+        const report = this.reportAccumulator.flush();
+        if (report) {
+          this.port.postMessage(report);
+        }
       }
     }
     return true;

@@ -30,6 +30,10 @@ Phase 7 adds a bilingual glossary for the core signal terms and evidence-linked,
 guidance. Guidance reports observations, possible causes, confidence, and reversible experiments;
 it does not claim a single physical cause or prescribe a universal tone adjustment. Usability and
 real-interface validation for this guidance remain open gates.
+The analysis reliability pass now uses calibrated Hann power spectra, rolling Welch-style
+averaging, persistent harmonic 50/60 Hz checks, a multi-second noise-floor estimate, complete UI
+interval aggregation, and authoritative engine data for snapshots. Its definitions and research
+basis are documented in [`docs/analysis-engine.md`](docs/analysis-engine.md).
 
 The first product goal is **Signal Health**:
 
@@ -241,7 +245,11 @@ import/export, 세션별 테스트 로그 export를 제공합니다. 실제 인�
 Phase 7에서는 핵심 신호 용어의 한글·영어 glossary와 근거가 연결된 규칙 기반 안내를
 추가했습니다. 안내는 관찰값, 가능한 원인, confidence, 되돌릴 수 있는 실험을 보여주며
 하나의 물리적 원인이나 보편적인 톤 조정을 단정하지 않습니다. 이 안내의 사용성 및 실제
-오인페이 검증은 아직 남은 Gate입니다.
+오인페 검증은 아직 남은 Gate입니다.
+분석 신뢰성 개선에서는 보정된 Hann power spectrum, rolling Welch 방식 평균, 시간 지속성과
+고조파를 함께 보는 50/60 Hz 검사, 수 초 단위 noise-floor 추정, UI 보고 구간 전체 집계,
+분석 엔진의 권위 데이터를 사용한 스냅샷을 적용했습니다. 정의와 연구 근거는
+[`docs/analysis-engine.md`](docs/analysis-engine.md)에 기록했습니다.
 
 MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤 release 시점에만
 `main`에 병합합니다. 일상적인 통합 대상은 `develop`이며, 기능 개발은 짧은 작업 브랜치에서
