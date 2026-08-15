@@ -13,6 +13,7 @@ export class AudioAnalysisError extends Error {
 }
 
 export interface AudioAnalysisSession {
+  analyser: AnalyserNode;
   context: AudioContext;
   muteGain: GainNode;
   node: AudioWorkletNode;
@@ -50,6 +51,7 @@ export async function startAudioAnalysis(
   );
   let source: MediaStreamAudioSourceNode | undefined;
   let node: AudioWorkletNode | undefined;
+  let analyser: AnalyserNode | undefined;
   let muteGain: GainNode | undefined;
 
   try {
@@ -60,20 +62,26 @@ export async function startAudioAnalysis(
       numberOfOutputs: 1,
       processorOptions: { sampleRate: context.sampleRate },
     });
+    analyser = context.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.8;
     muteGain = context.createGain();
     muteGain.gain.value = 0;
 
     node.port.onmessage = (event: MessageEvent<AudioMetrics>) => onMetrics(event.data);
     source.connect(node);
+    source.connect(analyser);
     // Keep the graph alive without sending the microphone back to the speakers.
     node.connect(muteGain);
+    analyser.connect(muteGain);
     muteGain.connect(context.destination);
     await context.resume();
 
-    return { context, muteGain, node, source };
+    return { analyser, context, muteGain, node, source };
   } catch (error) {
     source?.disconnect();
     node?.disconnect();
+    analyser?.disconnect();
     muteGain?.disconnect();
     await context.close().catch(() => undefined);
     throw new AudioAnalysisError(
@@ -88,6 +96,7 @@ export async function stopAudioAnalysis(session: AudioAnalysisSession): Promise<
   session.node.port.onmessage = null;
   session.source.disconnect();
   session.node.disconnect();
+  session.analyser.disconnect();
   session.muteGain.disconnect();
   await session.context.close().catch(() => undefined);
 }

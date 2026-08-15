@@ -27,6 +27,7 @@ declare function registerProcessor(
 
 class SignalAnalyzerProcessor extends AudioWorkletProcessor {
   private readonly analyzer;
+  private lastPostedAt = -Infinity;
 
   constructor(options?: WorkletProcessorOptions) {
     super(options);
@@ -40,7 +41,10 @@ class SignalAnalyzerProcessor extends AudioWorkletProcessor {
     const channels = (inputs[0] ?? []) as AudioChannelData;
     if (channels.length > 0 && channels[0]?.length) {
       const metrics = this.analyzer.pushFrame(channels);
-      this.port.postMessage({ ...metrics, timestampSeconds: currentTime });
+      if (currentTime - this.lastPostedAt >= 1 / 30) {
+        this.lastPostedAt = currentTime;
+        this.port.postMessage({ ...metrics, timestampSeconds: currentTime });
+      }
     }
     return true;
   }

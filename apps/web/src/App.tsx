@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 
 import type { AudioMetrics } from '@tone-capture-doctor/audio-core';
 
@@ -10,6 +10,7 @@ import {
   stopAudioStream,
 } from './audioInput';
 import { startAudioAnalysis, type AudioAnalysisSession, stopAudioAnalysis } from './audioAnalysis';
+import { startAudioClipCapture, type AudioClipCapture } from './audioClip';
 import {
   getInitialLocale,
   MESSAGES,
@@ -17,6 +18,19 @@ import {
   type ConnectionStatus,
   type Locale,
 } from './i18n';
+import { SignalVisualizer, type SignalFrameData } from './SignalVisualizer';
+import {
+  createSessionId,
+  deleteSnapshot,
+  exportTestLog,
+  exportSnapshots,
+  importSnapshots,
+  listSnapshots,
+  saveSnapshot,
+  SNAPSHOT_SCHEMA_VERSION,
+  TestLogWriter,
+  type SnapshotRecord,
+} from './sessionStore';
 
 function formatSetting(
   value: boolean | number | undefined,
@@ -58,32 +72,82 @@ export function App() {
     'unavailable',
   );
   const [metrics, setMetrics] = useState<AudioMetrics | null>(null);
+  const [analysisNode, setAnalysisNode] = useState<AnalyserNode | null>(null);
+  const [snapshots, setSnapshots] = useState<SnapshotRecord[]>([]);
+  const [snapshotLabel, setSnapshotLabel] = useState('');
+  const [snapshotNotes, setSnapshotNotes] = useState('');
+  const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
+  const [logSessionId, setLogSessionId] = useState<string | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analysisRef = useRef<AudioAnalysisSession | null>(null);
+  const logWriterRef = useRef<TestLogWriter | null>(null);
+  const logWriterStartRef = useRef<Promise<void> | null>(null);
+  const clipCaptureRef = useRef<AudioClipCapture | null>(null);
+  const visualDataRef = useRef<SignalFrameData>({ spectrum: [], waveform: [] });
+  const statusRef = useRef(status);
+  const localeRef = useRef(locale);
+  const pendingLogSessionIdRef = useRef<string | null>(null);
   const selectedDeviceRef = useRef('');
   const requestGenerationRef = useRef(0);
   const t = MESSAGES[locale];
 
-  const replaceSession = useCallback((nextSession: AudioInputSession) => {
-    if (streamRef.current && streamRef.current !== nextSession.stream) {
-      stopAudioStream(streamRef.current);
-    }
+  useEffect(() => {
+    statusRef.current = status;
+  }, [status]);
 
-    streamRef.current = nextSession.stream;
-    setSession(nextSession);
-    setMetrics(null);
-    setAnalysisStatus('starting');
-    const nextDeviceId = nextSession.selectedDeviceId ?? '';
-    selectedDeviceRef.current = nextDeviceId;
-    setSelectedDeviceId(nextDeviceId);
-    setStatus('connected');
+  useEffect(() => {
+    localeRef.current = locale;
+  }, [locale]);
+
+  useEffect(() => {
+    let active = true;
+    void listSnapshots()
+      .then((storedSnapshots) => {
+        if (active) {
+          setSnapshots(storedSnapshots);
+        }
+      })
+      .catch(() => {
+        if (active) {
+          setSnapshotMessage(t.snapshots.error);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [t.snapshots.error]);
+
+  const updateStatus = useCallback((nextStatus: ConnectionStatus) => {
+    statusRef.current = nextStatus;
+    setStatus(nextStatus);
   }, []);
+
+  const replaceSession = useCallback(
+    (nextSession: AudioInputSession) => {
+      if (streamRef.current && streamRef.current !== nextSession.stream) {
+        stopAudioStream(streamRef.current);
+      }
+
+      streamRef.current = nextSession.stream;
+      const nextLogSessionId = createSessionId();
+      pendingLogSessionIdRef.current = nextLogSessionId;
+      setLogSessionId(nextLogSessionId);
+      setSession(nextSession);
+      setMetrics(null);
+      setAnalysisStatus('starting');
+      const nextDeviceId = nextSession.selectedDeviceId ?? '';
+      selectedDeviceRef.current = nextDeviceId;
+      setSelectedDeviceId(nextDeviceId);
+      updateStatus('connected');
+    },
+    [updateStatus],
+  );
 
   const connect = useCallback(
     async (deviceId?: string) => {
       const previousDeviceId = selectedDeviceRef.current;
       const requestGeneration = ++requestGenerationRef.current;
-      setStatus('requesting');
+      updateStatus('requesting');
 
       try {
         const nextSession = await requestAudioInput(deviceId);
@@ -97,14 +161,14 @@ export function App() {
           return;
         }
         if (error instanceof AudioInputError) {
-          setStatus(error.code === 'unknown' ? 'error' : error.code);
+          updateStatus(error.code === 'unknown' ? 'error' : error.code);
         } else {
-          setStatus('error');
+          updateStatus('error');
         }
         setSelectedDeviceId(previousDeviceId);
       }
     },
-    [replaceSession],
+    [replaceSession, updateStatus],
   );
 
   const stop = useCallback(() => {
@@ -119,8 +183,8 @@ export function App() {
     setAnalysisStatus('unavailable');
     selectedDeviceRef.current = '';
     setSelectedDeviceId('');
-    setStatus('stopped');
-  }, []);
+    updateStatus('stopped');
+  }, [updateStatus]);
 
   useEffect(() => {
     return () => {
@@ -137,6 +201,28 @@ export function App() {
     }
 
     let cancelled = false;
+    const sessionId = pendingLogSessionIdRef.current ?? createSessionId();
+    pendingLogSessionIdRef.current = null;
+    const writer = new TestLogWriter({
+      appVersion: '0.0.0',
+      locale: localeRef.current,
+      sessionId,
+      startedAt: new Date().toISOString(),
+      trackSettings: {
+        autoGainControl: session.settings.autoGainControl,
+        channelCount: session.settings.channelCount,
+        deviceId: session.settings.deviceId,
+        echoCancellation: session.settings.echoCancellation,
+        noiseSuppression: session.settings.noiseSuppression,
+        sampleRate: session.settings.sampleRate,
+      },
+    });
+    logWriterRef.current = writer;
+    clipCaptureRef.current = startAudioClipCapture(session.stream);
+    const startPromise = writer
+      .start()
+      .catch(() => setSnapshotMessage(MESSAGES[localeRef.current].snapshots.error));
+    logWriterStartRef.current = startPromise;
 
     void startAudioAnalysis(
       session.stream,
@@ -144,6 +230,7 @@ export function App() {
         if (!cancelled) {
           setMetrics(nextMetrics);
           setAnalysisStatus('active');
+          writer.appendMetrics(nextMetrics);
         }
       },
       { sampleRate: session.settings.sampleRate },
@@ -154,22 +241,40 @@ export function App() {
           return;
         }
         analysisRef.current = nextAnalysis;
+        setAnalysisNode(nextAnalysis.analyser);
       })
       .catch(() => {
         if (!cancelled) {
           setAnalysisStatus('unavailable');
+          setAnalysisNode(null);
         }
       });
 
     return () => {
       cancelled = true;
+      setAnalysisNode(null);
       const currentAnalysis = analysisRef.current;
       analysisRef.current = null;
       if (currentAnalysis) {
         void stopAudioAnalysis(currentAnalysis);
       }
+      const currentClipCapture = clipCaptureRef.current;
+      clipCaptureRef.current = null;
+      if (currentClipCapture) {
+        void currentClipCapture.stop();
+      }
+      if (logWriterRef.current === writer) {
+        logWriterRef.current = null;
+        void writer.finish(statusRef.current).catch(() => undefined);
+      }
     };
   }, [session]);
+
+  useEffect(() => {
+    if (session && logWriterRef.current) {
+      logWriterRef.current.append('status', { status });
+    }
+  }, [session, status]);
 
   useEffect(() => {
     const track = session?.stream.getAudioTracks()[0];
@@ -184,12 +289,12 @@ export function App() {
       setAnalysisStatus('unavailable');
       selectedDeviceRef.current = '';
       setSelectedDeviceId('');
-      setStatus('device-unavailable');
+      updateStatus('device-unavailable');
     };
 
     track.addEventListener('ended', handleTrackEnded);
     return () => track.removeEventListener('ended', handleTrackEnded);
-  }, [session]);
+  }, [session, updateStatus]);
 
   useEffect(() => {
     if (!session || typeof navigator === 'undefined' || !navigator.mediaDevices?.addEventListener) {
@@ -213,15 +318,15 @@ export function App() {
             setAnalysisStatus('unavailable');
             selectedDeviceRef.current = '';
             setSelectedDeviceId('');
-            setStatus('device-unavailable');
+            updateStatus('device-unavailable');
           }
         })
-        .catch(() => setStatus('device-unavailable'));
+        .catch(() => updateStatus('device-unavailable'));
     };
 
     navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
     return () => navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
-  }, [session]);
+  }, [session, updateStatus]);
 
   const handleDeviceChange = (deviceId: string) => {
     void connect(deviceId);
@@ -231,6 +336,123 @@ export function App() {
     setLocale(nextLocale);
     persistLocale(nextLocale);
   };
+
+  const handleFrameData = useCallback((data: SignalFrameData) => {
+    visualDataRef.current = data;
+  }, []);
+
+  const handleSaveSnapshot = useCallback(async () => {
+    if (!session || !metrics) {
+      return;
+    }
+
+    try {
+      const audioClip = await clipCaptureRef.current?.getRecentClip();
+      const snapshot: SnapshotRecord = {
+        algorithmVersion: metrics.algorithmVersion,
+        ...(audioClip ? { audioClip } : {}),
+        channelCount: session.settings.channelCount ?? metrics.channelCount,
+        createdAt: new Date().toISOString(),
+        endSample: metrics.sampleCount,
+        fftSize: 2048,
+        id: `snapshot-${createSessionId()}`,
+        inputDeviceLabel: session.devices.find(
+          (device) => device.deviceId === session.selectedDeviceId,
+        )?.label,
+        label: snapshotLabel.trim() || `Signal ${snapshots.length + 1}`,
+        metrics: {
+          clippingCandidate: metrics.clippingCandidate,
+          crestFactorDb: metrics.crestFactorDb,
+          dominantFrequencyHz: metrics.dominantFrequencyHz,
+          humFrequencyHz: metrics.humFrequencyHz,
+          noiseFloorDbfs: metrics.noiseFloorDbfs,
+          peakDbfs: metrics.peakDbfs,
+          rmsDbfs: metrics.rmsDbfs,
+          sampleCount: metrics.sampleCount,
+          sampleRate: metrics.sampleRate,
+        },
+        notes: snapshotNotes.trim(),
+        sampleRate: metrics.sampleRate,
+        schemaVersion: SNAPSHOT_SCHEMA_VERSION,
+        sessionId: logSessionId ?? 'no-session',
+        spectrum: visualDataRef.current.spectrum,
+        startSample: Math.max(0, metrics.sampleCount - 2048),
+        waveform: visualDataRef.current.waveform,
+        window: 'hann',
+      };
+      await saveSnapshot(snapshot);
+      setSnapshots(await listSnapshots());
+      setSnapshotLabel('');
+      setSnapshotNotes('');
+      setSnapshotMessage(audioClip ? t.snapshots.audioClipSaved : t.snapshots.saved);
+    } catch {
+      setSnapshotMessage(t.snapshots.error);
+    }
+  }, [logSessionId, metrics, session, snapshotLabel, snapshotNotes, snapshots.length, t.snapshots]);
+
+  const handleDeleteSnapshot = useCallback(
+    async (snapshotId: string) => {
+      if (!window.confirm(t.snapshots.deleteConfirm)) {
+        return;
+      }
+      await deleteSnapshot(snapshotId);
+      setSnapshots(await listSnapshots());
+    },
+    [t.snapshots.deleteConfirm],
+  );
+
+  const handleExportLog = useCallback(async () => {
+    if (!logSessionId) {
+      setSnapshotMessage(t.snapshots.empty);
+      return;
+    }
+    try {
+      await logWriterStartRef.current;
+      const log = await exportTestLog(logSessionId);
+      const blob = new Blob([JSON.stringify(log, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `tone-capture-doctor-${logSessionId}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setSnapshotMessage(t.snapshots.error);
+    }
+  }, [logSessionId, t.snapshots]);
+
+  const handleExportSnapshots = useCallback(async () => {
+    try {
+      const serialized = await exportSnapshots();
+      const blob = new Blob([serialized], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = 'tone-capture-doctor-snapshots.json';
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setSnapshotMessage(t.snapshots.error);
+    }
+  }, [t.snapshots.error]);
+
+  const handleImportSnapshots = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.currentTarget.files?.[0];
+      event.currentTarget.value = '';
+      if (!file) {
+        return;
+      }
+      try {
+        await importSnapshots(await file.text());
+        setSnapshots(await listSnapshots());
+        setSnapshotMessage(t.snapshots.imported);
+      } catch {
+        setSnapshotMessage(t.snapshots.invalidImport);
+      }
+    },
+    [t.snapshots.imported, t.snapshots.invalidImport],
+  );
 
   const isRequesting = status === 'requesting';
   const hasSession = session !== null;
@@ -455,6 +677,121 @@ export function App() {
             <p className="analysis-state">
               {analysisStatus === 'starting' ? t.analysis.starting : t.analysis.unavailable}
             </p>
+          )}
+        </article>
+      </section>
+
+      <section className="phase5-grid" aria-label={t.snapshots.title}>
+        <article className="panel visualizer-panel">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">{t.visualizer.waveform}</p>
+              <h3>{t.metrics.title}</h3>
+            </div>
+            <span className="panel-index">05</span>
+          </div>
+          <SignalVisualizer
+            analyser={analysisNode}
+            locale={locale}
+            noSignalLabel={t.visualizer.noSignal}
+            onFrameData={handleFrameData}
+            spectrumLabel={t.visualizer.spectrum}
+            spectrogramLabel={t.visualizer.spectrogram}
+            timeWindowLabel={t.visualizer.timeWindow}
+            waveformLabel={t.visualizer.waveform}
+          />
+        </article>
+
+        <article className="panel snapshots-panel">
+          <p className="eyebrow">{t.snapshots.eyebrow}</p>
+          <h3>{t.snapshots.title}</h3>
+          <div className="snapshot-form">
+            <label className="field-label" htmlFor="snapshot-label">
+              {t.snapshots.label}
+              <input
+                id="snapshot-label"
+                value={snapshotLabel}
+                onChange={(event) => setSnapshotLabel(event.target.value)}
+              />
+            </label>
+            <label className="field-label" htmlFor="snapshot-notes">
+              {t.snapshots.notes}
+              <textarea
+                id="snapshot-notes"
+                rows={3}
+                value={snapshotNotes}
+                onChange={(event) => setSnapshotNotes(event.target.value)}
+              />
+            </label>
+            <div className="snapshot-actions">
+              <button
+                type="button"
+                disabled={!session || !metrics}
+                onClick={() => void handleSaveSnapshot()}
+              >
+                {t.snapshots.save}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                disabled={!logSessionId}
+                onClick={() => void handleExportLog()}
+              >
+                {t.snapshots.exportLog}
+              </button>
+              <button
+                className="secondary-button"
+                type="button"
+                onClick={() => void handleExportSnapshots()}
+              >
+                {t.snapshots.exportSnapshots}
+              </button>
+              <label className="secondary-button file-button" htmlFor="snapshot-import">
+                {t.snapshots.importSnapshots}
+                <input
+                  id="snapshot-import"
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={handleImportSnapshots}
+                />
+              </label>
+            </div>
+          </div>
+          {snapshotMessage && (
+            <p className="snapshot-message" role="status">
+              {snapshotMessage}
+            </p>
+          )}
+          {snapshots.length === 0 ? (
+            <p className="analysis-state">{t.snapshots.empty}</p>
+          ) : (
+            <ul className="snapshot-list">
+              {snapshots.map((snapshot) => (
+                <li className="snapshot-card" key={snapshot.id}>
+                  <div className="snapshot-card-heading">
+                    <strong>{snapshot.label}</strong>
+                    <button
+                      className="text-button"
+                      type="button"
+                      onClick={() => void handleDeleteSnapshot(snapshot.id)}
+                    >
+                      {t.snapshots.delete}
+                    </button>
+                  </div>
+                  <span>{new Date(snapshot.createdAt).toLocaleString(locale)}</span>
+                  <p>
+                    {formatDbfs(snapshot.metrics.peakDbfs)} · {formatDbfs(snapshot.metrics.rmsDbfs)}{' '}
+                    · {formatFrequency(snapshot.metrics.dominantFrequencyHz)}
+                  </p>
+                  {snapshot.audioClip ? (
+                    <small>{t.snapshots.audioClipSaved}</small>
+                  ) : (
+                    <small>{t.snapshots.audioClipUnavailable}</small>
+                  )}
+                  {snapshot.notes && <p className="snapshot-notes">{snapshot.notes}</p>}
+                </li>
+              ))}
+            </ul>
           )}
         </article>
       </section>

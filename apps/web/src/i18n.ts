@@ -40,6 +40,32 @@ export interface Messages {
     rms: string;
     title: string;
   };
+  snapshots: {
+    audioClipSaved: string;
+    audioClipUnavailable: string;
+    delete: string;
+    deleteConfirm: string;
+    empty: string;
+    error: string;
+    exportLog: string;
+    exportSnapshots: string;
+    importSnapshots: string;
+    imported: string;
+    invalidImport: string;
+    label: string;
+    notes: string;
+    save: string;
+    saved: string;
+    title: string;
+    eyebrow: string;
+  };
+  visualizer: {
+    noSignal: string;
+    spectrum: string;
+    spectrogram: string;
+    timeWindow: string;
+    waveform: string;
+  };
   connection: {
     audioStatus: string;
     inputUnavailable: string;
@@ -108,6 +134,32 @@ export const MESSAGES: Record<Locale, Messages> = {
       peak: 'Peak',
       rms: 'RMS',
       title: 'Signal metrics',
+    },
+    snapshots: {
+      audioClipSaved: 'A short local audio clip is attached to this snapshot.',
+      audioClipUnavailable: 'Audio clip capture is unavailable in this browser.',
+      delete: 'Delete',
+      deleteConfirm: 'Delete this local snapshot?',
+      empty: 'Save a snapshot during a live test to compare metrics later.',
+      error: 'The snapshot could not be saved. Check local browser storage and try again.',
+      exportLog: 'Export test log',
+      exportSnapshots: 'Export snapshots',
+      importSnapshots: 'Import snapshots',
+      imported: 'Snapshots imported locally.',
+      invalidImport: 'The snapshot file could not be imported.',
+      label: 'Snapshot label',
+      notes: 'Notes about this test',
+      save: 'Save snapshot',
+      saved: 'Snapshot saved locally.',
+      title: 'Test snapshots',
+      eyebrow: 'Phase 5 · local evidence',
+    },
+    visualizer: {
+      noSignal: 'Start Signal Health to see the local signal.',
+      spectrum: 'Spectrum · logarithmic frequency axis',
+      spectrogram: 'Spectrogram',
+      timeWindow: 'Waveform zoom',
+      waveform: 'Waveform',
     },
     connection: {
       audioStatus: 'Audio input status',
@@ -224,6 +276,32 @@ export const MESSAGES: Record<Locale, Messages> = {
       peak: 'Peak',
       rms: 'RMS',
       title: '신호 지표',
+    },
+    snapshots: {
+      audioClipSaved: '짧은 로컬 오디오 클립이 이 스냅샷에 첨부되었습니다.',
+      audioClipUnavailable: '이 브라우저에서는 오디오 클립 캡처를 사용할 수 없습니다.',
+      delete: '삭제',
+      deleteConfirm: '이 로컬 스냅샷을 삭제할까요?',
+      empty: '실시간 테스트 중 스냅샷을 저장하면 나중에 지표를 비교할 수 있습니다.',
+      error: '스냅샷을 저장하지 못했습니다. 브라우저 로컬 저장소를 확인하고 다시 시도하세요.',
+      exportLog: '테스트 로그 내보내기',
+      exportSnapshots: '스냅샷 내보내기',
+      importSnapshots: '스냅샷 가져오기',
+      imported: '스냅샷을 로컬로 가져왔습니다.',
+      invalidImport: '스냅샷 파일을 가져오지 못했습니다.',
+      label: '스냅샷 이름',
+      notes: '테스트 메모',
+      save: '스냅샷 저장',
+      saved: '스냅샷을 로컬에 저장했습니다.',
+      title: '테스트 스냅샷',
+      eyebrow: 'Phase 5 · 로컬 증거',
+    },
+    visualizer: {
+      noSignal: 'Signal Health를 시작하면 로컬 신호를 볼 수 있습니다.',
+      spectrum: '스펙트럼 · 로그 주파수 축',
+      spectrogram: '스펙트로그램',
+      timeWindow: '파형 확대',
+      waveform: '파형',
     },
     connection: {
       audioStatus: '오디오 입력 상태',

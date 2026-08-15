@@ -19,8 +19,10 @@ The project is local-first: the initial web app does not upload audio to a serve
 ### Project status
 
 This repository is in early development. The current MVP foundation is a React/Vite web app with
-automated tests and CI. The first local microphone and device-selection flow plus an initial
-deterministic measurement engine are now in place; visualization and snapshots remain planned work.
+automated tests and CI. The first local microphone and device-selection flow, deterministic
+measurement engine, and initial Phase 5 visual evidence workflow are now in place. The web app
+provides waveform, spectrum, spectrogram, local snapshots, snapshot JSON import/export, and
+per-session test-log export. Real interface verification is still a manual release gate.
 
 The first product goal is **Signal Health**:
 
@@ -71,6 +73,12 @@ npm run dev
 Open the local URL shown by Vite. The Signal Health dashboard requests microphone permission only
 after you explicitly choose Start. The current flow keeps the stream local, shows the selected input
 and actual track settings, and allows you to stop the session.
+
+When an interface is available, a Signal Health session also records structured metric and status
+events in local browser storage. Use **Export test log** to download a JSON file for later review.
+The log contains measurements, settings, timestamps, and algorithm/schema versions; it does not
+contain raw audio. A raw clip is kept only when you explicitly save a snapshot, and remains local
+to that snapshot. Snapshot metadata can be exported/imported separately as JSON.
 
 For Windows PowerShell:
 
@@ -143,7 +151,7 @@ load box, DI, or another path explicitly approved by the equipment manufacturer.
 2. UI shell with empty, permission, device, and error states. (in progress)
 3. Permission flow and device selection after a user click. (implemented; real-device Gate pending)
 4. Deterministic measurement engine with synthetic fixtures. (initial engine implemented; long-run and real-device verification pending)
-5. Waveform, spectrum, spectrogram, and snapshots.
+5. Waveform, spectrum, spectrogram, snapshots, and local test-log export. (initial implementation; real-device Gate pending)
 6. Tone Compare, rule-based guidance, dry/wet comparison, and local session export.
 7. Desktop and extension companions only after browser limitations are demonstrated.
 
@@ -206,8 +214,10 @@ ToneCaptureDoctor는 기타·베이스 연주자가 다음 질문에 답할 수 
 ### 프로젝트 상태
 
 이 저장소는 초기 개발 단계입니다. 현재 MVP 기반은 자동 테스트와 CI를 포함한 React/Vite 웹
-앱입니다. 첫 로컬 마이크 권한 요청과 장치 선택 흐름, 초기 결정론적 측정 엔진이 구현되었으며,
-시각화와 스냅샷은 아직 계획된 작업입니다.
+앱입니다. 첫 로컬 마이크 권한 요청과 장치 선택 흐름, 결정론적 측정 엔진, 초기 Phase 5 시각
+증거 흐름이 구현되었습니다. 웹 앱은 파형, 스펙트럼, 스펙트로그램, 로컬 스냅샷, 스냅샷 JSON
+import/export, 세션별 테스트 로그 export를 제공합니다. 실제 인터페이스 검증은 아직 release
+수동 Gate입니다.
 
 첫 제품 목표는 **Signal Health**입니다.
 
@@ -258,6 +268,12 @@ npm run dev
 Vite가 표시한 로컬 주소를 브라우저에서 엽니다. Signal Health 대시보드는 사용자가 Start를
 명시적으로 선택한 뒤에만 마이크 권한을 요청합니다. 현재 흐름은 스트림을 로컬에 유지하고,
 선택한 입력과 실제 track 설정을 표시하며, 세션을 중지할 수 있습니다.
+
+오인페이를 연결할 수 있는 환경에서는 Signal Health 세션의 지표·상태 이벤트를 브라우저 로컬
+저장소에 구조화해 기록합니다. **테스트 로그 내보내기**로 나중에 검토할 JSON을 받을 수 있습니다.
+로그에는 측정값, 설정, 시각, 알고리즘/스키마 버전이 들어가며 raw audio는 들어가지 않습니다. raw
+clip은 사용자가 스냅샷 저장을 명시적으로 선택한 경우에만 해당 스냅샷에 로컬로 보관됩니다.
+스냅샷 metadata는 별도의 JSON으로 export/import할 수 있습니다.
 
 Windows PowerShell:
 
@@ -330,7 +346,7 @@ DI 또는 장비 제조사가 명시적으로 허용한 경로를 사용합니�
 2. 빈 상태·권한·장치·오류 상태를 포함한 UI shell. (진행 중)
 3. 사용자 클릭 이후 권한 요청과 장치 선택. (구현 완료, 실제 장비 Gate 대기)
 4. 합성 fixture를 포함한 결정론적 측정 엔진. (초기 엔진 구현, 장시간·실제 장비 검증 대기)
-5. 파형·스펙트럼·스펙트로그램·스냅샷.
+5. 파형·스펙트럼·스펙트로그램·스냅샷·로컬 테스트 로그 export. (초기 구현, 실제 장비 Gate 대기)
 6. Tone Compare, 규칙 기반 안내, dry/wet 비교, 로컬 세션 export.
 7. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
 
