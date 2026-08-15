@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { App } from './App';
+import { deleteSnapshot, saveSnapshot, type SnapshotRecord } from './sessionStore';
 
 function createStream(deviceId: string, overrides: MediaTrackSettings = {}) {
   const track = {
@@ -176,5 +177,63 @@ describe('Signal Health input flow', () => {
     resolveUserMedia(stream);
 
     await waitFor(() => expect(track.stop).toHaveBeenCalledTimes(1));
+  });
+
+  it('compares two saved snapshots without opening an audio input', async () => {
+    const createSnapshot = (id: string, label: string): SnapshotRecord => ({
+      algorithmVersion: '0.1.0',
+      channelCount: 1,
+      createdAt: new Date().toISOString(),
+      endSample: 128,
+      fftSize: 2_048,
+      id,
+      label,
+      metrics: {
+        clippingCandidate: false,
+        crestFactorDb: 3,
+        dominantFrequencyHz: 440,
+        humFrequencyHz: null,
+        noiseFloorDbfs: -60,
+        peakDbfs: -6,
+        rmsDbfs: -12,
+        sampleCount: 128,
+        sampleRate: 48_000,
+      },
+      notes: '',
+      sampleRate: 48_000,
+      schemaVersion: 1,
+      sessionId: 'test-session',
+      spectrum: [0.2, 1, 0.3],
+      startSample: 0,
+      waveform: Array.from({ length: 128 }, (_, index) => Math.sin(index / 5)),
+      window: 'hann',
+    });
+    const reference = createSnapshot('compare-reference', 'Compare A');
+    const candidate = createSnapshot('compare-candidate', 'Compare B');
+    await saveSnapshot(reference);
+    await saveSnapshot(candidate);
+
+    try {
+      render(<App />);
+      await waitFor(() =>
+        expect(screen.getAllByRole('option', { name: 'Compare A' })).toHaveLength(2),
+      );
+      fireEvent.change(screen.getByRole('combobox', { name: 'Reference snapshot' }), {
+        target: { value: reference.id },
+      });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Candidate snapshot' }), {
+        target: { value: candidate.id },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Compare snapshots' }));
+
+      expect(await screen.findByText('Tone Compare · measured differences')).toBeInTheDocument();
+      expect(screen.getByText('Loudness normalization')).toBeInTheDocument();
+      expect(
+        (navigator.mediaDevices as unknown as ReturnType<typeof createMediaDevices>).getUserMedia,
+      ).not.toHaveBeenCalled();
+    } finally {
+      await deleteSnapshot(reference.id);
+      await deleteSnapshot(candidate.id);
+    }
   });
 });

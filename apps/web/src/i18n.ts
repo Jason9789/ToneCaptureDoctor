@@ -78,6 +78,33 @@ export interface Messages {
     noLabelledInputs: string;
     startToList: string;
   };
+  compare: {
+    alignment: string;
+    candidate: string;
+    confidence: string;
+    confidenceHigh: string;
+    confidenceLow: string;
+    confidenceMedium: string;
+    delta: string;
+    empty: string;
+    frequencyChanged: string;
+    frequencyInterpretation: string;
+    lowConfidenceNotice: string;
+    loudnessNormalized: string;
+    normalization: string;
+    noMaterialDifference: string;
+    noiseChanged: string;
+    noiseInterpretation: string;
+    reference: string;
+    run: string;
+    selectBoth: string;
+    spectrumDelta: string;
+    title: string;
+    waveformDelta: string;
+    clippingCandidate: string;
+    clippingInterpretation: string;
+    band: string;
+  };
   hero: {
     copy: string;
     eyebrow: string;
@@ -180,6 +207,38 @@ export const MESSAGES: Record<Locale, Messages> = {
       noLabelledInputs:
         'No labelled audio inputs were returned. Check the browser device permission.',
       startToList: 'Start Signal Health to request permission and list available inputs.',
+    },
+    compare: {
+      alignment: 'Alignment',
+      candidate: 'Candidate snapshot',
+      confidence: 'Difference confidence',
+      confidenceHigh: 'High · stable repeated signal',
+      confidenceLow: 'Low · clipping, noise, or weak alignment',
+      confidenceMedium: 'Medium · useful directional evidence',
+      delta: 'Delta',
+      empty: 'Choose two saved snapshots to compare after a test.',
+      frequencyChanged: 'Frequency balance changed by at least 1.5 dB in one or more bands.',
+      frequencyInterpretation:
+        'Possible interpretation: the input chain changed frequency balance; check the same playing passage and routing.',
+      lowConfidenceNotice:
+        'Treat this as measured evidence, not a tone verdict. Repeat with matched playing and level.',
+      loudnessNormalized: 'Candidate level was normalized before waveform comparison.',
+      normalization: 'Loudness normalization',
+      noMaterialDifference:
+        'No large measured difference crossed the current comparison thresholds.',
+      noiseChanged: 'Noise floor changed by at least 3 dB.',
+      noiseInterpretation:
+        'Possible interpretation: the noise environment or input gain changed; repeat with the same idle interval.',
+      reference: 'Reference snapshot',
+      run: 'Compare snapshots',
+      selectBoth: 'Select two different snapshots first.',
+      spectrumDelta: 'Spectrum mean delta',
+      title: 'Tone Compare · measured differences',
+      waveformDelta: 'Waveform RMS delta',
+      clippingCandidate: 'Clipping candidate present in one snapshot.',
+      clippingInterpretation:
+        'Possible interpretation: clipping can dominate the difference; lower input gain and capture again.',
+      band: 'Band',
     },
     hero: {
       copy: 'Check whether an instrument signal is reaching your interface before comparing tones. The first release keeps analysis local and explains the next useful experiment.',
@@ -329,6 +388,36 @@ export const MESSAGES: Record<Locale, Messages> = {
       noLabelledInputs:
         '이름이 있는 오디오 입력을 받지 못했습니다. 브라우저 장치 권한을 확인하세요.',
       startToList: 'Start Signal Health를 눌러 권한을 요청하고 사용 가능한 입력을 확인하세요.',
+    },
+    compare: {
+      alignment: '정렬',
+      candidate: '비교 스냅샷',
+      confidence: '차이 신뢰도',
+      confidenceHigh: '높음 · 반복 신호가 안정적임',
+      confidenceLow: '낮음 · 클리핑·노이즈 또는 약한 정렬',
+      confidenceMedium: '중간 · 방향성을 보여주는 근거',
+      delta: '차이',
+      empty: '테스트 후 저장한 스냅샷 2개를 선택하면 비교할 수 있습니다.',
+      frequencyChanged: '하나 이상의 대역에서 주파수 밸런스가 1.5 dB 이상 변했습니다.',
+      frequencyInterpretation:
+        '가능한 해석: 입력 체인의 주파수 밸런스가 달라졌습니다. 같은 연주 구간과 라우팅으로 다시 확인하세요.',
+      lowConfidenceNotice: '이는 측정 근거이지 톤 판정이 아닙니다. 같은 연주와 레벨로 반복하세요.',
+      loudnessNormalized: '파형 비교 전에 비교 스냅샷의 레벨을 보정했습니다.',
+      normalization: '음량 보정',
+      noMaterialDifference: '현재 비교 기준을 넘는 큰 측정 차이는 없습니다.',
+      noiseChanged: '노이즈 플로어가 3 dB 이상 변했습니다.',
+      noiseInterpretation:
+        '가능한 해석: 노이즈 환경 또는 입력 게인이 달라졌습니다. 같은 무음 구간으로 다시 확인하세요.',
+      reference: '기준 스냅샷',
+      run: '스냅샷 비교',
+      selectBoth: '서로 다른 스냅샷 2개를 먼저 선택하세요.',
+      spectrumDelta: '스펙트럼 평균 차이',
+      title: 'Tone Compare · 측정 차이',
+      waveformDelta: '파형 RMS 차이',
+      clippingCandidate: '한 스냅샷에서 클리핑 후보가 발견되었습니다.',
+      clippingInterpretation:
+        '가능한 해석: 클리핑이 차이를 지배할 수 있습니다. 입력 게인을 낮추고 다시 캡처하세요.',
+      band: '대역',
     },
     hero: {
       copy: '톤을 비교하기 전에 악기 신호가 인터페이스에 제대로 들어오는지 확인합니다. 첫 버전은 분석을 로컬에서 수행하고 다음에 해볼 실험을 설명합니다.',

@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'react';
 
-import type { AudioMetrics } from '@tone-capture-doctor/audio-core';
+import {
+  compareSnapshots,
+  type AudioMetrics,
+  type SnapshotComparison,
+} from '@tone-capture-doctor/audio-core';
 
 import {
   AudioInputError,
@@ -80,6 +84,9 @@ export function App() {
   const [snapshotNotes, setSnapshotNotes] = useState('');
   const [snapshotMessage, setSnapshotMessage] = useState<string | null>(null);
   const [logSessionId, setLogSessionId] = useState<string | null>(null);
+  const [referenceSnapshotId, setReferenceSnapshotId] = useState('');
+  const [candidateSnapshotId, setCandidateSnapshotId] = useState('');
+  const [comparison, setComparison] = useState<SnapshotComparison | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const analysisRef = useRef<AudioAnalysisSession | null>(null);
   const logWriterRef = useRef<TestLogWriter | null>(null);
@@ -468,6 +475,23 @@ export function App() {
     [t.snapshots.imported, t.snapshots.invalidImport],
   );
 
+  const handleCompare = useCallback(() => {
+    const reference = snapshots.find((snapshot) => snapshot.id === referenceSnapshotId);
+    const candidate = snapshots.find((snapshot) => snapshot.id === candidateSnapshotId);
+    if (!reference || !candidate || reference.id === candidate.id) {
+      setComparison(null);
+      setSnapshotMessage(t.compare.selectBoth);
+      return;
+    }
+    try {
+      setComparison(compareSnapshots(reference, candidate));
+      setSnapshotMessage(null);
+    } catch {
+      setComparison(null);
+      setSnapshotMessage(t.compare.empty);
+    }
+  }, [candidateSnapshotId, referenceSnapshotId, snapshots, t.compare]);
+
   const isRequesting = status === 'requesting';
   const hasSession = session !== null;
   const isError = ['permission-denied', 'device-unavailable', 'unsupported', 'error'].includes(
@@ -770,6 +794,141 @@ export function App() {
                 />
               </label>
             </div>
+          </div>
+          <div className="compare-panel">
+            <p className="eyebrow">{t.compare.title}</p>
+            <div className="compare-selects">
+              <label className="field-label" htmlFor="reference-snapshot">
+                {t.compare.reference}
+                <select
+                  id="reference-snapshot"
+                  value={referenceSnapshotId}
+                  onChange={(event) => setReferenceSnapshotId(event.target.value)}
+                >
+                  <option value="">—</option>
+                  {snapshots.map((snapshot) => (
+                    <option key={snapshot.id} value={snapshot.id}>
+                      {snapshot.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="field-label" htmlFor="candidate-snapshot">
+                {t.compare.candidate}
+                <select
+                  id="candidate-snapshot"
+                  value={candidateSnapshotId}
+                  onChange={(event) => setCandidateSnapshotId(event.target.value)}
+                >
+                  <option value="">—</option>
+                  {snapshots.map((snapshot) => (
+                    <option key={snapshot.id} value={snapshot.id}>
+                      {snapshot.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <button type="button" disabled={snapshots.length < 2} onClick={handleCompare}>
+              {t.compare.run}
+            </button>
+            {comparison && (
+              <div className="compare-result" aria-live="polite">
+                <p className="analysis-state">
+                  <strong>{t.compare.confidence}: </strong>
+                  {comparison.confidence === 'high'
+                    ? t.compare.confidenceHigh
+                    : comparison.confidence === 'medium'
+                      ? t.compare.confidenceMedium
+                      : t.compare.confidenceLow}
+                </p>
+                <dl className="settings-list compare-metrics">
+                  <div>
+                    <dt>{t.compare.normalization}</dt>
+                    <dd>{comparison.normalizationGainDb.toFixed(1)} dB</dd>
+                  </div>
+                  <div>
+                    <dt>{t.compare.alignment}</dt>
+                    <dd>
+                      {comparison.alignmentLagSamples} samples ·{' '}
+                      {comparison.alignmentCorrelation.toFixed(2)} correlation
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>{t.compare.waveformDelta}</dt>
+                    <dd>{comparison.waveformRmsDelta.toFixed(3)}</dd>
+                  </div>
+                  <div>
+                    <dt>{t.compare.spectrumDelta}</dt>
+                    <dd>{comparison.spectrumMeanAbsoluteDelta.toFixed(3)}</dd>
+                  </div>
+                </dl>
+                <ul className="compare-facts">
+                  {comparison.flags.loudnessNormalizationApplied && (
+                    <li>{t.compare.loudnessNormalized}</li>
+                  )}
+                  {comparison.flags.alignmentApplied && (
+                    <li>
+                      {t.compare.alignment}: {comparison.alignmentLagSamples} samples
+                    </li>
+                  )}
+                  {comparison.flags.frequencyBalanceChanged && (
+                    <li>{t.compare.frequencyChanged}</li>
+                  )}
+                  {comparison.flags.noiseFloorChanged && <li>{t.compare.noiseChanged}</li>}
+                  {(comparison.flags.referenceClipping || comparison.flags.candidateClipping) && (
+                    <li>{t.compare.clippingCandidate}</li>
+                  )}
+                  {!comparison.flags.frequencyBalanceChanged &&
+                    !comparison.flags.noiseFloorChanged &&
+                    !comparison.flags.referenceClipping &&
+                    !comparison.flags.candidateClipping && (
+                      <li>{t.compare.noMaterialDifference}</li>
+                    )}
+                </ul>
+                <div className="compare-interpretations">
+                  <strong>{t.compare.lowConfidenceNotice}</strong>
+                  {(comparison.flags.frequencyBalanceChanged ||
+                    comparison.flags.referenceClipping ||
+                    comparison.flags.candidateClipping ||
+                    comparison.flags.noiseFloorChanged) && (
+                    <ul className="compare-facts">
+                      {(comparison.flags.referenceClipping ||
+                        comparison.flags.candidateClipping) && (
+                        <li>{t.compare.clippingInterpretation}</li>
+                      )}
+                      {comparison.flags.frequencyBalanceChanged && (
+                        <li>{t.compare.frequencyInterpretation}</li>
+                      )}
+                      {comparison.flags.noiseFloorChanged && (
+                        <li>{t.compare.noiseInterpretation}</li>
+                      )}
+                    </ul>
+                  )}
+                </div>
+                <table className="band-table">
+                  <thead>
+                    <tr>
+                      <th>{t.compare.band}</th>
+                      <th>{t.compare.delta}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {comparison.frequencyBands.map((band) => (
+                      <tr key={band.label}>
+                        <td>
+                          {band.minimumHz.toLocaleString()}–{band.maximumHz.toLocaleString()} Hz
+                        </td>
+                        <td>{band.deltaDb.toFixed(1)} dB</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {!comparison && snapshots.length < 2 && (
+              <p className="analysis-state">{t.compare.empty}</p>
+            )}
           </div>
           {snapshotMessage && (
             <p className="snapshot-message" role="status">

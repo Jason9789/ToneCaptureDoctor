@@ -329,3 +329,5 @@ export function createAudioAnalyzer(options: AudioAnalysisOptions): AudioAnalyze
 }
 
 export const AUDIO_WORKLET_PROCESSOR_NAME = 'tone-capture-doctor-analyzer';
+
+export * from './compare';

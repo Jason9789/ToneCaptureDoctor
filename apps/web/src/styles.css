@@ -439,6 +439,74 @@ canvas {
   font-size: 0.85rem;
 }
 
+.compare-panel {
+  display: grid;
+  gap: 0.8rem;
+  margin-top: 1.4rem;
+  border-top: 1px solid rgba(155, 228, 193, 0.12);
+  padding-top: 1.2rem;
+}
+
+.compare-panel .eyebrow {
+  margin-bottom: 0;
+}
+
+.compare-selects {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.compare-result {
+  display: grid;
+  gap: 0.8rem;
+  border: 1px solid rgba(155, 228, 193, 0.16);
+  border-radius: 0.9rem;
+  padding: 0.9rem;
+  background: rgba(9, 23, 18, 0.55);
+}
+
+.compare-metrics {
+  margin: 0;
+}
+
+.compare-facts,
+.compare-interpretations {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #d4e6dd;
+  font-size: 0.8rem;
+  line-height: 1.55;
+}
+
+.compare-interpretations {
+  padding: 0.7rem 0.8rem;
+  border-radius: 0.65rem;
+  color: #f2ca8a;
+  background: rgba(231, 185, 121, 0.08);
+}
+
+.compare-interpretations ul {
+  margin-top: 0.5rem;
+}
+
+.band-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+
+.band-table th,
+.band-table td {
+  border-bottom: 1px solid rgba(155, 228, 193, 0.12);
+  padding: 0.45rem 0.25rem;
+  text-align: left;
+}
+
+.band-table th:last-child,
+.band-table td:last-child {
+  text-align: right;
+}
+
 .snapshot-list {
   display: grid;
   gap: 0.75rem;

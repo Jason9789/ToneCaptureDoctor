@@ -23,6 +23,9 @@ automated tests and CI. The first local microphone and device-selection flow, de
 measurement engine, and initial Phase 5 visual evidence workflow are now in place. The web app
 provides waveform, spectrum, spectrogram, local snapshots, snapshot JSON import/export, and
 per-session test-log export. Real interface verification is still a manual release gate.
+The initial Tone Compare workflow is also available for saved snapshots: it reports loudness
+normalization, alignment, waveform/spectrum deltas, frequency-band changes, and confidence without
+assigning a universal tone score.
 
 The first product goal is **Signal Health**:
 
@@ -79,6 +82,9 @@ events in local browser storage. Use **Export test log** to download a JSON file
 The log contains measurements, settings, timestamps, and algorithm/schema versions; it does not
 contain raw audio. A raw clip is kept only when you explicitly save a snapshot, and remains local
 to that snapshot. Snapshot metadata can be exported/imported separately as JSON.
+Choose two saved snapshots in Tone Compare to inspect loudness normalization, alignment,
+waveform/spectrum differences, frequency-band changes, and confidence. The comparison does not
+produce a universal tone score.
 
 For Windows PowerShell:
 
@@ -152,7 +158,7 @@ load box, DI, or another path explicitly approved by the equipment manufacturer.
 3. Permission flow and device selection after a user click. (implemented; real-device Gate pending)
 4. Deterministic measurement engine with synthetic fixtures. (initial engine implemented; long-run and real-device verification pending)
 5. Waveform, spectrum, spectrogram, snapshots, and local test-log export. (initial implementation; real-device Gate pending)
-6. Tone Compare, rule-based guidance, dry/wet comparison, and local session export.
+6. Tone Compare, rule-based guidance, dry/wet comparison, and local session export. (initial comparison engine and UI implemented; synthetic and real-device validation remain)
 7. Desktop and extension companions only after browser limitations are demonstrated.
 
 See [`PLAN.md`](./PLAN.md) for acceptance criteria, manual gates, and the current issue order.
@@ -273,7 +279,9 @@ Vite가 표시한 로컬 주소를 브라우저에서 엽니다. Signal Health �
 저장소에 구조화해 기록합니다. **테스트 로그 내보내기**로 나중에 검토할 JSON을 받을 수 있습니다.
 로그에는 측정값, 설정, 시각, 알고리즘/스키마 버전이 들어가며 raw audio는 들어가지 않습니다. raw
 clip은 사용자가 스냅샷 저장을 명시적으로 선택한 경우에만 해당 스냅샷에 로컬로 보관됩니다.
-스냅샷 metadata는 별도의 JSON으로 export/import할 수 있습니다.
+스냅샷 metadata는 별도의 JSON으로 export/import할 수 있습니다. 저장한 스냅샷 2개를 Tone Compare에서
+선택하면 음량 보정량, 정렬량, 파형/스펙트럼 차이, 주파수 대역 변화, confidence를 확인할 수
+있으며 보편적인 톤 점수는 만들지 않습니다.
 
 Windows PowerShell:
 
@@ -347,7 +355,7 @@ DI 또는 장비 제조사가 명시적으로 허용한 경로를 사용합니�
 3. 사용자 클릭 이후 권한 요청과 장치 선택. (구현 완료, 실제 장비 Gate 대기)
 4. 합성 fixture를 포함한 결정론적 측정 엔진. (초기 엔진 구현, 장시간·실제 장비 검증 대기)
 5. 파형·스펙트럼·스펙트로그램·스냅샷·로컬 테스트 로그 export. (초기 구현, 실제 장비 Gate 대기)
-6. Tone Compare, 규칙 기반 안내, dry/wet 비교, 로컬 세션 export.
+6. Tone Compare, 규칙 기반 안내, dry/wet 비교, 로컬 세션 export. (초기 비교 엔진·UI 구현, 합성·실제 장비 검증 대기)
 7. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
 
 수용 조건, 수동 Gate, 현재 이슈 순서는 [`PLAN.md`](./PLAN.md)를 확인합니다. 유지보수자와
