@@ -1,64 +1,89 @@
 # ToneCaptureDoctor
 
-기타·베이스 연주자를 위한 **로컬 우선 신호 건강검진·톤 비교·캡처 검증 도구**입니다.
+Local-first signal health and tone comparison tools for guitar and bass players.
 
-ToneCaptureDoctor는 “좋은 톤/나쁜 톤”을 임의로 판정하는 앱이 아닙니다. 오디오 인터페이스, 실물 페달, 멀티 이펙터, 플러그인, 앰프/캐비넷, NAM 캡처 전후의 신호를 측정하고, 사용자가 저장한 기준 톤과 비교하고, 다음에 확인할 실험을 설명합니다.
+[English](#english) · [한국어](#한국어)
 
-> 기타/베이스를 연결하고, 신호가 정상인지 확인하고, 톤을 저장·비교하고, 문제가 생겼을 때 다음 행동을 이해하게 하는 오픈소스 도구.
+---
 
-## 프로젝트 상태
+## English
 
-현재는 설계 단계입니다. 첫 공개 버전의 범위는 다음 하나입니다.
+ToneCaptureDoctor helps musicians answer a practical question:
 
-> **Signal Health:** 기타/베이스 → 오디오 인터페이스 입력의 파형·스펙트럼·레벨·클리핑·노이즈를 확인하고 스냅샷으로 저장한다.
+> Is the signal reaching my interface correctly, and what should I check next?
 
-톤 비교, dry/wet 비교, NAM Capture Check는 Signal Health가 실제 장비에서 안정적으로 동작한 뒤에 추가합니다.
+It measures an instrument or audio chain, lets you save reproducible snapshots, compares them
+with a reference, and explains possible causes without pretending that one “correct tone” exists.
+The project is local-first: the initial web app does not upload audio to a server.
 
-이 순서를 지키지 않고 처음부터 AI 톤 추천, 모든 DAW 루프백, 모든 이펙터 자동 인식까지 구현하려 하면 프로젝트가 실패할 가능성이 높습니다.
+### Project status
 
-AI와 함께 개발할 때는 [AI_HARNESS.md](./AI_HARNESS.md)를 먼저 읽습니다. 이 문서는 다른 작업 컴퓨터에서 README와 PLAN을 로드하고, 한 번에 하나의 이슈만 구현하고, 자동 테스트와 실제 장비 테스트를 분리하고, 사람의 Gate 확인 후에만 다음 Phase로 넘어가기 위한 작업 계약입니다.
+This repository is in early development. The current MVP foundation is a React/Vite web shell with
+automated tests and CI. Real microphone permission, device selection, and DSP are implemented in
+later plan issues and are not part of the current shell.
 
-## Quick Start — GitHub에서 내려받아 실행하기
+The first product goal is **Signal Health**:
 
-현재 저장소의 첫 실행 대상은 `web` PWA입니다. 정식 desktop installer와 Chrome extension은 해당 phase의 gate를 통과한 뒤 별도 release로 배포합니다.
+- input device and channel status;
+- waveform, spectrum, and level views;
+- peak/RMS, dBFS, noise-floor, and clipping-candidate measurements;
+- reproducible local snapshots;
+- clear next checks instead of unsupported gear-specific knob instructions.
 
-### 필요한 것
+The MVP will be merged to `main` only after its automated checks, documentation, safety review, and
+macOS/Windows device gates pass. Feature work happens on branches and is reviewed before merge.
 
-- macOS 또는 Windows
-- Node.js 24 LTS
-- npm 11.x
-- Chrome 또는 Edge 권장
-- 기타/베이스와 오디오 인터페이스
-- 브라우저의 오디오 입력 권한
+### What is in scope
 
-### macOS·Linux 터미널
+- guitar/bass → audio interface input diagnostics;
+- local waveform and frequency analysis;
+- reference snapshots and A/B comparison;
+- dry/wet comparison after the basic input path is stable;
+- export/import of local session data;
+- accessible explanations of terms such as dBFS, RMS, FFT, and noise floor.
+
+### What is deliberately out of scope
+
+- an AI tone judge or a universal “good tone” score;
+- an amp modeler, NAM player, or DAW replacement;
+- automatic setup of every virtual audio driver or DAW routing;
+- direct conversion of an unsafe amplifier output;
+- cloud accounts, cloud audio storage, or server-side audio analysis in the MVP.
+
+### Quick start
+
+Requirements:
+
+- Node.js 24.x and npm 11.x;
+- macOS or Windows for the supported development paths;
+- Chrome or Edge recommended for browser testing;
+- an audio interface and instrument for later Signal Health testing.
 
 ```bash
-git clone https://github.com/<owner>/tone-capture-doctor.git
-cd tone-capture-doctor
+git clone https://github.com/Jason9789/ToneCaptureDoctor.git
+cd ToneCaptureDoctor
 
-# package-lock.json 기준으로 의존성을 설치한다.
 npm ci
-
-# 개발 서버를 실행한다.
 npm run dev
 ```
 
-### Windows PowerShell
+Open the local URL shown by Vite. The current shell displays the Signal Health dashboard and does
+not request microphone permission yet. Audio permission will only be requested after an explicit
+user action in the relevant issue.
+
+For Windows PowerShell:
 
 ```powershell
-git clone https://github.com/<owner>/tone-capture-doctor.git
-Set-Location tone-capture-doctor
-
+git clone https://github.com/Jason9789/ToneCaptureDoctor.git
+Set-Location ToneCaptureDoctor
 npm ci
 npm run dev
 ```
 
-터미널에 표시된 `http://localhost:<port>` 주소를 브라우저에서 엽니다. `Start`를 클릭한 뒤 마이크 권한을 허용하고, 오디오 인터페이스의 instrument/Hi-Z 입력 채널을 선택합니다. 브라우저에서 입력 장치가 보이지 않으면 운영체제의 마이크 권한과 인터페이스 전용 드라이버/펌웨어를 먼저 확인합니다.
-
-### 개발자 검증 명령
+### Development commands
 
 ```bash
+npm run format:check
 npm run lint
 npm run typecheck
 npm test
@@ -67,293 +92,268 @@ npm run build
 npm run preview
 ```
 
-`npm ci`는 lockfile이 없는 상태에서 사용하지 않습니다. 의존성을 변경할 때는 `npm install` 후 `package-lock.json`을 함께 커밋하고, CI와 다른 사람의 환경에서는 `npm ci`를 사용합니다.
-
-### 처음 실행할 때의 안전한 연결
-
-```text
-기타/베이스 → 인터페이스 instrument/Hi-Z input → ToneCaptureDoctor
-```
-
-실물 페달을 비교할 때만 다음처럼 두 입력을 사용합니다.
-
-```text
-dry: 기타/DI → Input 1
-wet: 기타/DI → 페달 → Input 2
-```
-
-진공관 앰프의 speaker output은 인터페이스에 직접 연결하지 않습니다. 마이크·load box·DI 등 제조사가 허용한 경로를 사용합니다.
-
-### 문제 해결에 필요한 정보
-
-실행이 실패하면 다음을 함께 기록합니다.
+If Playwright Chromium is not installed locally:
 
 ```bash
-node --version
-npm --version
+npx playwright install chromium
 ```
 
-- OS와 버전
-- 브라우저와 버전
-- 인터페이스 모델·펌웨어·드라이버
-- 샘플레이트·버퍼·선택한 채널
-- 연결 경로와 기타/베이스·픽업
-- 브라우저 콘솔 오류
-- 개인정보를 제거한 `.tonecheck` 파일 또는 synthetic fixture
+Use `npm install` only when intentionally changing dependencies. Commit the resulting
+`package-lock.json`; use `npm ci` for clean clones and CI.
 
-오디오 원본과 API key를 GitHub issue에 업로드하지 않습니다. 초기 웹 버전은 서버에 오디오를 업로드하지 않는 것을 목표로 합니다.
+### Safe audio routing
 
-### 정식 release가 아직 없는 경우
-
-`Signal Health` PWA가 1.0 gate를 통과하기 전에는 GitHub의 소스 실행만 지원합니다. `npm run desktop`이나 설치 프로그램이 없다고 해서 오류가 아닙니다. Tauri desktop과 Chrome extension은 README의 phase와 release tag가 별도로 생성된 뒤 안내합니다.
-
-## 핵심 모드
-
-| 모드 | 목적 | 1.0 포함 여부 |
-|---|---|---:|
-| `Signal Health` | 입력 장치, 채널, 레벨, 클리핑, 노이즈, 험 점검 | 필수 |
-| `Tone Compare` | Snapshot A/B와 사용자 기준 톤 비교 | 필수 |
-| `Dry/Wet Doctor` | 실물 페달·멀티 이펙터 전후 비교 | 1.0 후반 |
-| `Capture Check` | NAM 등 캡처 전후 데이터 검증 | 1.0 후반 |
-| `Pick Coach` | 피킹 어택·일관성·타이밍 분석 | 후속 |
-
-## 지원하려는 연결
-
-### 기본 입력
+Start with the simplest supported path:
 
 ```text
-기타/베이스 → 오디오 인터페이스 → ToneCaptureDoctor
+Instrument → interface instrument/Hi-Z input → ToneCaptureDoctor
 ```
 
-### 실물 이펙터 dry/wet
+For a later dry/wet comparison:
 
 ```text
-기타 → 인터페이스 Input 1 (dry DI)
-기타/DI → 페달 → 인터페이스 Input 2 (wet return)
+dry:  instrument/DI → interface Input 1
+wet:  instrument/DI → pedal → interface Input 2
 ```
 
-### 멀티 이펙터
+Never connect a tube amplifier speaker output directly to an interface input. Use a microphone,
+load box, DI, or another path explicitly approved by the equipment manufacturer.
 
-- USB 오디오 장치로 연결
-- 아날로그 출력은 인터페이스 line input으로 연결
-- stereo 출력은 좌우 채널을 별도 분석
+### Privacy and local-first design
 
-### 플러그인/DAW
+- The MVP does not upload original audio to a server.
+- Real-time analysis runs in the browser; local session storage uses browser storage or exported files.
+- Do not commit original recordings, API keys, access tokens, private keys, cookies, or personal data.
+- Do not add telemetry, login, cloud sync, or a remote analysis API without a documented design,
+  privacy review, and user consent.
+- Constraints requested for instrument input must be checked against the actual track settings.
 
-초기에는 WAV/FLAC export 또는 오디오 인터페이스 loopback으로 지원합니다. 브라우저가 모든 DAW의 시스템 출력을 자동으로 읽는다고 약속하지 않습니다. 안정적인 DAW 연동은 후속 데스크톱 오디오 브리지 또는 VST3/AU companion plugin의 범위입니다.
+### Roadmap
 
-### 앰프와 NAM
+1. Repository shell, reproducible build, tests, and CI.
+2. UI shell with empty, permission, device, and error states.
+3. Permission flow and device selection after a user click.
+4. Deterministic measurement engine with synthetic fixtures.
+5. Waveform, spectrum, spectrogram, and snapshots.
+6. Tone Compare, rule-based guidance, dry/wet comparison, and local session export.
+7. Desktop and extension companions only after browser limitations are demonstrated.
 
-앰프 speaker output을 오디오 인터페이스에 직접 연결하지 않습니다. 마이크, load box, DI 또는 제조사가 허용한 안전한 출력 경로를 사용해야 합니다. `Capture Check`는 NAM만을 위한 독립 제품이 아니라 전체 분석 도구의 한 모드입니다.
+See [`PLAN.md`](./PLAN.md) for acceptance criteria, manual gates, and the current issue order.
+Maintainers should also read [`AI_HARNESS.md`](./AI_HARNESS.md) and [`harness/`](./harness/).
 
-## 무엇을 측정하는가
-
-### 시간 영역
-
-- 실시간 waveform
-- peak/RMS
-- attack/onset
-- sustain/decay
-- clipping(flat-top) 후보
-- 피킹 반복 간 변동성
-
-### 주파수 영역
-
-- log-frequency spectrum
-- spectrogram
-- fundamental/harmonic 후보
-- 대역별 에너지 차이
-- 50/60Hz 험과 배음
-- noise floor
-
-### 비교
-
-- Snapshot A/B
-- onset 정렬
-- 음량 보정 후 비교
-- 사용자 기준 톤과의 상대 차이
-- dry/wet gain, latency, dynamics 차이
-
-Waveform 하나만으로 톤을 판단하지 않습니다. 파형은 시간 변화를, spectrum은 배음과 주파수 분포를, spectrogram은 그 변화가 시간에 따라 어떻게 달라지는지를 보여줍니다.
-
-## 스냅샷 원칙
-
-스냅샷은 화면 이미지가 아니라 재현 가능한 분석 세션입니다.
-
-저장해야 하는 값:
-
-- 짧은 원본 오디오 클립
-- 파형·스펙트럼 분석 결과
-- 입력 장치·채널·샘플레이트·채널 수
-- FFT 크기·window·평균화·스무딩 설정
-- peak·RMS·noise floor·clipping 상태
-- dry/wet 라벨과 사용자 메모
-- onset 정렬과 음량 보정 정보
-- 앱 버전·분석 알고리즘 버전·세션 스키마 버전
-
-수동 연주는 매번 달라지므로 동일 음 또는 리프를 3~5회 측정하고 중앙값과 변동폭을 보여줍니다.
-
-## 조언의 한계
-
-이 프로젝트는 “Bass를 3 올리세요” 같은 근거 없는 장비별 노브 지시를 하지 않습니다.
-
-예시:
-
-> “기준 톤보다 180~300Hz가 3dB 높습니다. 먼저 넓게 1~2dB 줄인 뒤 같은 리프를 다시 측정하세요. 원인은 EQ뿐 아니라 픽업, 캐비넷, 마이크, 방 공진일 수 있습니다.”
-
-모든 기타·베이스·픽업·튜닝·케이블·인터페이스·앰프·캐비넷에 통하는 하나의 정상 스펙트럼은 없습니다. 앱은 다음 세 가지를 분리합니다.
-
-1. **안전 기준:** 입력 없음, clipping, 과도한 noise, 험, 비정상 채널 불균형
-2. **사용자 기준:** `My Clean Bass`, `Pedal On`, `NAM DI` 등 사용자가 저장한 레퍼런스
-3. **해석 휴리스틱:** 대략적인 대역 설명과 가능한 원인
-
-## 기술 스택
-
-버전은 `package-lock.json`과 CI에서 고정합니다. 문서에 `latest`를 의존성 버전으로 사용하지 않습니다.
-
-| 영역 | 선택 | 이유 |
-|---|---|---|
-| 런타임 | Node.js 24 LTS | 현재 Active/Maintenance LTS를 사용하고 Current 릴리스는 사용하지 않음 |
-| 패키지 | npm 11 + npm workspaces | 사용자와 AI가 추가 도구 없이 시작하기 쉬움 |
-| 언어 | TypeScript 5.9, `strict: true` | UI·분석 데이터 구조를 하나의 타입으로 공유 |
-| UI | React 19.2 | 생태계·접근성·Chrome extension 재사용 |
-| 빌드 | Vite 8.x | 빠른 개발 서버와 정적 빌드 |
-| PWA | `vite-plugin-pwa` | manifest와 service worker 생성 |
-| 오디오 입력 | Web Audio API `getUserMedia()` | 브라우저·PWA 공통 입력 경로 |
-| 실시간 DSP | `AudioWorklet` | UI 스레드와 오디오 처리를 분리 |
-| 고성능 DSP | 후속 WebAssembly | 프로파일링 결과가 필요할 때만 도입 |
-| 시각화 | Canvas 2D + 접근 가능한 HTML 수치 | 차트 라이브러리 종속과 렌더링 비용 최소화 |
-| 로컬 저장 | IndexedDB(`idb`) | 오디오·세션을 서버 없이 저장 |
-| 세션 파일 | JSON 메타데이터 + WAV/FLAC 자산, 후속 `.tonecheck` archive | 재현성과 이식성 |
-| 스타일 | CSS Modules/일반 CSS 변수 | UI 프레임워크 종속 최소화 |
-| 테스트 | Vitest, Testing Library, Playwright | DSP 단위·UI·브라우저 흐름 분리 |
-| 린트/포맷 | ESLint, Prettier | 자동 수정과 CI 차단 기준 통일 |
-| 데스크톱 | Tauri 2.11.x 후속 도입 | 동일 웹 UI를 macOS·Windows shell로 재사용 |
-| 네이티브 오디오 | Rust stable + 선택적 `cpal` bridge | 브라우저 한계가 확인된 뒤에만 추가 |
-| 확장 | Chrome Manifest V3 | PWA와 공통 UI/분석 모듈 재사용 |
-| CI/CD | GitHub Actions | 테스트, 정적 배포, 릴리스 artifact 자동화 |
-| 정적 호스팅 | GitHub Pages(데모) 또는 Cloudflare Pages(운영) | 서버 없이 HTTPS 제공 |
-
-현재 Node.js LTS와 Vite·React·Tauri 릴리스는 출시 시점에 다시 확인해야 합니다. 버전 번호보다 `package-lock.json`, `.nvmrc`, `rust-toolchain.toml`을 신뢰합니다.
-
-## 저장소 구조
+### Repository layout
 
 ```text
-tone-capture-doctor/
-├─ apps/
-│  ├─ web/                 # 정식 PWA
-│  ├─ desktop/             # Phase 10 이후 Tauri
-│  └─ extension/           # Phase 11 이후 Chrome MV3
-├─ packages/
-│  ├─ audio-core/          # 입력, frame, peak, RMS, FFT
-│  ├─ analysis-rules/      # 측정값 → 가능한 원인/실험
-│  ├─ glossary/            # dBFS·Hz·RMS·FFT 설명
-│  ├─ session-format/      # snapshot과 .tonecheck schema
-│  └─ ui/                  # 공통 UI·접근성 컴포넌트
-├─ fixtures/
-│  ├─ synthetic/           # sine, noise, hum, clipping, impulse
-│  └─ field/               # 권리 확인된 기타/베이스 WAV
-├─ docs/
-│  ├─ routing/             # 장비 연결법
-│  ├─ safety/              # speaker/load-box 안전
-│  ├─ adr/                 # Architecture Decision Records
-│  └─ testing/             # 수동 테스트 체크리스트
-├─ README.md
-├─ PLAN.md
-├─ LICENSE
-├─ CONTRIBUTING.md
-├─ CODE_OF_CONDUCT.md
-├─ SECURITY.md
-├─ PRIVACY.md
-├─ CHANGELOG.md
-├─ package.json
-├─ package-lock.json
-├─ .nvmrc
-└─ rust-toolchain.toml
+apps/web/          React/Vite web app
+packages/          Shared audio, analysis, glossary, session, and UI packages (planned)
+fixtures/          Synthetic or rights-cleared test assets (planned)
+docs/              Safety, routing, ADR, and testing documentation (planned)
+harness/           AI workflow state, prompts, and sanitized verification reports
+PLAN.md            Product phases, acceptance criteria, and manual gates
+AI_HARNESS.md      AI development and review contract
 ```
 
-## 로컬 우선·서버리스
+### Contributing
 
-기본 동작에서 오디오는 서버로 전송하지 않습니다.
+1. Read `README.md`, `AI_HARNESS.md`, and the relevant `PLAN.md` phase.
+2. Work on one small issue and one phase at a time.
+3. Add or update tests with code changes.
+4. Report `PASS`, `FAIL`, or `BLOCKED` with the environment and commands used.
+5. Keep real-device tests separate from synthetic and browser automation tests.
+6. Do not broaden scope into audio upload, unsafe routing, secrets, or unapproved dependencies.
+7. Do not mark a phase gate complete without explicit human verification.
 
-- 서버는 정적 HTML/CSS/JS와 문서만 제공
-- 실시간 분석은 브라우저/데스크톱에서 수행
-- 세션은 IndexedDB와 사용자가 내보낸 파일에 저장
-- 계정·로그인·클라우드 동기화는 MVP에 없음
-- 분석 telemetry는 opt-in이며 오디오 원본을 수집하지 않음
-- AI 분석 API는 초기 범위에 없음
+Issues should include the OS, browser, interface, driver/firmware, sample rate, routing, steps,
+expected result, actual result, and sanitized evidence. Do not attach private recordings or secrets.
 
-`getUserMedia()`는 HTTPS 또는 localhost에서만 동작하며 사용자 권한이 필요합니다. Chrome extension의 MV3 service worker는 DOM을 사용할 수 없으므로 오디오 처리에는 extension page 또는 `chrome.offscreen`의 `USER_MEDIA` 문서가 필요합니다. Extension은 탭 오디오와 실제 오디오 인터페이스 입력을 같은 것으로 취급하지 않습니다.
+### License
 
-## 운영 규칙
+The project is being prepared as open source. The code and documentation license files are part of
+the release baseline and will be published before the first public release. Until a license file is
+present, do not assume that the repository grants redistribution or commercial-use rights.
 
-이 프로젝트의 모든 구현자는 다음을 지킵니다.
+### References
 
-1. 작업 전에 `README.md`와 해당 `PLAN.md` phase를 읽는다.
-2. 한 번에 하나의 작은 이슈만 작업한다.
-3. 코드 변경에는 테스트와 변경 이유를 함께 추가한다.
-4. DSP 결과를 바꾸면 synthetic fixture와 회귀 테스트를 갱신한다.
-5. 새로운 라이브러리나 OS API는 ADR을 먼저 작성한다.
-6. 사용자의 원본 오디오나 키를 커밋하지 않는다.
-7. 테스트를 실행하지 못했으면 완료라고 보고하지 않는다.
-8. `git reset --hard`, 무분별한 파일 삭제, 의존성 전체 업그레이드를 하지 않는다.
-9. 측정 불확실성이 있는 결과를 “정답”으로 표현하지 않는다.
-10. 안전하지 않은 앰프 연결을 예시로 작성하지 않는다.
+- [MDN: `getUserMedia()`](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
+- [MDN: AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Using_AudioWorklet)
+- [Vite documentation](https://vite.dev/)
+- [React documentation](https://react.dev/)
+- [Node.js releases](https://nodejs.org/en/about/previous-releases)
+- [Playwright documentation](https://playwright.dev/)
 
-## 라이선스 방향
+---
 
-- 소스 코드: MIT 권장
-- 문서: CC BY 4.0 권장
-- 합성 fixture: CC0 또는 저장소가 명시한 permissive license
-- 제3자 오디오·IR·앰프 impulse·브랜드 이미지: 권리 확인 전 포함하지 않음
-- MIT는 상표권을 부여하지 않으므로 `ToneCaptureDoctor` 이름과 로고는 별도로 관리
-- 모든 의존성은 CI에서 라이선스 검사
+## 한국어
 
-라이선스 선택은 법률 자문이 아닙니다. 상용화나 회사 자산을 포함할 때는 실제 권리자와 법률 전문가의 검토가 필요합니다.
+ToneCaptureDoctor는 기타·베이스 연주자가 다음 질문에 답할 수 있도록 돕는 도구입니다.
 
-## 기여와 이슈
+> 인터페이스에 신호가 제대로 들어오고 있는가? 다음에 무엇을 확인해야 하는가?
 
-Issue는 다음 타입 중 하나로 등록합니다.
+악기 또는 오디오 체인을 측정하고, 재현 가능한 스냅샷을 저장하고, 기준 톤과 비교하고,
+하나의 “정답 톤”이 있다고 가장하지 않으면서 가능한 원인과 다음 실험을 설명합니다.
+초기 웹 앱은 로컬 우선으로 동작하며 오디오 원본을 서버에 업로드하지 않습니다.
 
-- `bug`: 재현 절차가 있는 결함
-- `audio-fixture`: 특정 입력의 분석 오류
-- `device-compatibility`: 인터페이스·OS·브라우저 조합 문제
-- `feature`: PLAN에 있는 기능
-- `docs`: 연결·사전·테스트 문서
-- `security/privacy`: 데이터·권한·배포 문제
+### 프로젝트 상태
 
-재현되지 않는 “톤이 이상하다”는 이슈는 먼저 장치·샘플레이트·채널·입력 파일·스냅샷을 요청합니다.
+이 저장소는 초기 개발 단계입니다. 현재 MVP 기반은 자동 테스트와 CI를 포함한 React/Vite 웹
+shell입니다. 실제 마이크 권한 요청, 장치 선택, DSP는 이후 PLAN 이슈에서 구현하며 현재
+shell에는 포함되어 있지 않습니다.
 
-## 정식 출시 조건
+첫 제품 목표는 **Signal Health**입니다.
 
-정식 1.0은 기능이 많아서가 아니라 다음을 통과했을 때입니다.
+- 입력 장치와 채널 상태 표시;
+- 파형·스펙트럼·레벨 표시;
+- peak/RMS, dBFS, noise floor, clipping 후보 측정;
+- 재현 가능한 로컬 스냅샷;
+- 근거 없는 장비별 노브 지시 대신 다음 확인 방법 안내.
 
-- P0/P1 버그 0개
-- 합성 신호와 저장/불러오기 회귀 테스트 100% 통과
-- 지원 브라우저와 최소 macOS·Windows 조합에서 30분 연속 입력 테스트 통과
-- 오디오가 서버로 전송되지 않음을 네트워크 테스트로 확인
-- 권한 거부·장치 분리·샘플레이트 변경·무신호 상태를 사용자에게 설명
-- 공개 베타에서 서로 다른 인터페이스 3종 이상과 기타/베이스 양쪽 테스트
-- 안전 문서·개인정보 정책·라이선스·변경 로그·문제 해결 문서 준비
-- PWA 배포 artifact와 소스 tag가 재현 가능
+MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤에만 `main`에
+병합합니다. 기능 개발은 작업 브랜치에서 진행하고 검토 후 병합합니다.
 
-구체적인 phase별 gate와 수동 테스트 절차는 [`PLAN.md`](./PLAN.md)에 있습니다.
+### 포함 범위
 
-## 출처
+- 기타/베이스 → 오디오 인터페이스 입력 진단;
+- 로컬 파형·주파수 분석;
+- 기준 스냅샷과 A/B 비교;
+- 기본 입력 경로가 안정된 뒤 dry/wet 비교;
+- 로컬 세션 export/import;
+- dBFS, RMS, FFT, noise floor 같은 용어의 접근 가능한 설명.
 
-- [MDN — getUserMedia](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
-- [MDN — AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Using_AudioWorklet)
-- [Vite PWA Guide](https://vite-pwa-org.netlify.app/guide/)
-- [Node.js Releases](https://nodejs.org/en/about/previous-releases)
-- [Vite Releases](https://vite.dev/releases)
-- [React Versions](https://react.dev/versions)
-- [Tauri Frontend Configuration](https://v2.tauri.app/start/frontend/)
-- [Chrome Manifest V3](https://developer.chrome.com/docs/extensions/develop/migrate/what-is-mv3)
-- [Chrome Offscreen API](https://developer.chrome.com/docs/extensions/reference/api/offscreen)
-- [Chrome User Data Policy](https://developer.chrome.com/docs/webstore/program-policies/user-data-faq)
-- [Apple — Notarizing macOS software](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution)
-- [Microsoft — Choose a distribution path](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/choose-distribution-path)
+### 의도적으로 제외하는 범위
 
-## 상태
+- AI 톤 심사 또는 보편적인 “좋은 톤” 점수;
+- 앰프 모델러, NAM 플레이어, DAW 대체;
+- 모든 가상 오디오 드라이버와 DAW 라우팅 자동 설정;
+- 위험한 앰프 출력을 안전한 신호로 자동 변환하는 기능;
+- MVP의 클라우드 계정, 클라우드 오디오 저장, 서버 오디오 분석.
 
-설계 단계. 구현은 `PLAN.md`의 Phase 0부터 순서대로 진행합니다.
+### 빠른 시작
+
+필요한 환경:
+
+- Node.js 24.x와 npm 11.x;
+- 지원 개발 경로인 macOS 또는 Windows;
+- 브라우저 테스트는 Chrome 또는 Edge 권장;
+- 이후 Signal Health 테스트를 위한 오디오 인터페이스와 악기.
+
+```bash
+git clone https://github.com/Jason9789/ToneCaptureDoctor.git
+cd ToneCaptureDoctor
+
+npm ci
+npm run dev
+```
+
+Vite가 표시한 로컬 주소를 브라우저에서 엽니다. 현재 shell은 Signal Health 대시보드를
+표시하지만 아직 마이크 권한을 요청하지 않습니다. 오디오 권한은 해당 이슈에서 사용자의
+명시적인 동작 뒤에만 요청합니다.
+
+Windows PowerShell:
+
+```powershell
+git clone https://github.com/Jason9789/ToneCaptureDoctor.git
+Set-Location ToneCaptureDoctor
+npm ci
+npm run dev
+```
+
+### 개발자 검증 명령
+
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm test
+npm run test:e2e
+npm run build
+npm run preview
+```
+
+로컬에 Playwright Chromium이 없으면 다음을 실행합니다.
+
+```bash
+npx playwright install chromium
+```
+
+의존성을 의도적으로 변경할 때만 `npm install`을 사용합니다. 생성된 `package-lock.json`을
+함께 커밋하고, 새 clone과 CI에서는 `npm ci`를 사용합니다.
+
+### 안전한 오디오 연결
+
+가장 단순한 지원 경로에서 시작합니다.
+
+```text
+악기 → 인터페이스 instrument/Hi-Z input → ToneCaptureDoctor
+```
+
+이후 dry/wet 비교 경로:
+
+```text
+dry: 악기/DI → 인터페이스 Input 1
+wet: 악기/DI → 페달 → 인터페이스 Input 2
+```
+
+진공관 앰프의 speaker output을 인터페이스 입력에 직접 연결하지 않습니다. 마이크, load box,
+DI 또는 장비 제조사가 명시적으로 허용한 경로를 사용합니다.
+
+### 개인정보와 로컬 우선 설계
+
+- MVP는 원본 오디오를 서버에 업로드하지 않습니다.
+- 실시간 분석은 브라우저에서 수행하며 세션은 브라우저 저장소 또는 export 파일에 저장합니다.
+- 원본 녹음, API key, access token, private key, 쿠키, 개인정보를 커밋하지 않습니다.
+- 문서화·개인정보 검토·사용자 동의 없이 telemetry, 로그인, 클라우드 동기화, 원격 분석 API를
+  추가하지 않습니다.
+- 악기 입력에 요청한 constraint가 실제 track settings에 적용됐는지 확인해야 합니다.
+
+### 로드맵
+
+1. 저장소 shell, 재현 가능한 빌드, 테스트, CI.
+2. 빈 상태·권한·장치·오류 상태를 포함한 UI shell.
+3. 사용자 클릭 이후 권한 요청과 장치 선택.
+4. 합성 fixture를 포함한 결정론적 측정 엔진.
+5. 파형·스펙트럼·스펙트로그램·스냅샷.
+6. Tone Compare, 규칙 기반 안내, dry/wet 비교, 로컬 세션 export.
+7. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
+
+수용 조건, 수동 Gate, 현재 이슈 순서는 [`PLAN.md`](./PLAN.md)를 확인합니다. 유지보수자와
+AI 작업자는 [`AI_HARNESS.md`](./AI_HARNESS.md)와 [`harness/`](./harness/)도 읽습니다.
+
+### 저장소 구조
+
+```text
+apps/web/          React/Vite 웹 앱
+packages/          공통 오디오·분석·용어·세션·UI 패키지 (예정)
+fixtures/          합성 또는 권리 확인 테스트 자산 (예정)
+docs/              안전·라우팅·ADR·테스트 문서 (예정)
+harness/           AI 작업 상태·프롬프트·검증 보고서
+PLAN.md            제품 Phase·완료 조건·수동 Gate
+AI_HARNESS.md      AI 개발과 검토 계약
+```
+
+### 기여 방법
+
+1. `README.md`, `AI_HARNESS.md`, 해당 `PLAN.md` Phase를 읽습니다.
+2. 한 번에 하나의 작은 이슈와 하나의 Phase만 작업합니다.
+3. 코드 변경과 함께 테스트를 추가하거나 갱신합니다.
+4. 실행한 명령과 환경을 포함해 `PASS`, `FAIL`, `BLOCKED`로 보고합니다.
+5. 실제 장비 테스트와 합성·브라우저 자동 테스트를 분리합니다.
+6. 오디오 업로드, 위험한 라우팅, 비밀정보, 승인되지 않은 의존성으로 범위를 넓히지 않습니다.
+7. 사람의 명시적인 확인 없이 Phase Gate를 완료 처리하지 않습니다.
+
+이슈에는 OS, 브라우저, 인터페이스, 드라이버/펌웨어, 샘플레이트, 라우팅, 단계, 기대 결과,
+실제 결과, 개인정보가 제거된 증거를 포함합니다. 개인 녹음과 비밀정보는 첨부하지 않습니다.
+
+### 라이선스
+
+이 프로젝트는 오픈소스 공개를 준비 중입니다. 코드와 문서 라이선스 파일은 첫 공개 release
+기준선에 포함해 게시할 예정입니다. 라이선스 파일이 추가되기 전에는 저장소가 재배포 또는
+상업적 사용 권리를 부여한다고 가정하지 마세요.
+
+### 참고 문서
+
+- [MDN: `getUserMedia()`](https://developer.mozilla.org/en-US/docs/Web/API/MediaDevices/getUserMedia)
+- [MDN: AudioWorklet](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API/Using_AudioWorklet)
+- [Vite 문서](https://vite.dev/)
+- [React 문서](https://react.dev/)
+- [Node.js release](https://nodejs.org/en/about/previous-releases)
+- [Playwright 문서](https://playwright.dev/)
