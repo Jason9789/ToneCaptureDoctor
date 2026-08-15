@@ -152,6 +152,24 @@ p {
   box-shadow: 0 0 0 0.3rem rgba(231, 185, 121, 0.1);
 }
 
+.connection-dot-connected {
+  background: #9be4c1;
+  box-shadow: 0 0 0 0.3rem rgba(155, 228, 193, 0.1);
+}
+
+.connection-dot-requesting,
+.connection-dot-stopped {
+  background: #e7b979;
+}
+
+.connection-dot-permission-denied,
+.connection-dot-device-unavailable,
+.connection-dot-unsupported,
+.connection-dot-error {
+  background: #ef8e84;
+  box-shadow: 0 0 0 0.3rem rgba(239, 142, 132, 0.1);
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -175,6 +193,65 @@ p {
 
 .panel-primary p {
   max-width: 34rem;
+}
+
+.field-label {
+  display: grid;
+  gap: 0.65rem;
+  color: #d4e6dd;
+  font-weight: 700;
+}
+
+select {
+  width: 100%;
+  border: 1px solid rgba(155, 228, 193, 0.22);
+  border-radius: 0.75rem;
+  padding: 0.8rem;
+  color: #e8f0ec;
+  background: #152a24;
+  font: inherit;
+}
+
+select:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.error-message {
+  margin-top: 1.25rem;
+  color: #ffb2a9;
+}
+
+.settings-list {
+  display: grid;
+  gap: 0.65rem;
+  margin: 1.25rem 0 0;
+}
+
+.settings-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(155, 228, 193, 0.12);
+  padding-bottom: 0.55rem;
+}
+
+.settings-list dt {
+  color: #a7bcb3;
+}
+
+.settings-list dd {
+  margin: 0;
+  color: #f5fbf7;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.warning-list {
+  margin: 1.25rem 0 0;
+  padding-left: 1.1rem;
+  color: #f2ca8a;
+  font-size: 0.9rem;
 }
 
 .metric-list {
