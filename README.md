@@ -18,9 +18,9 @@ The project is local-first: the initial web app does not upload audio to a serve
 
 ### Project status
 
-This repository is in early development. The current MVP foundation is a React/Vite web shell with
-automated tests and CI. Real microphone permission, device selection, and DSP are implemented in
-later plan issues and are not part of the current shell.
+This repository is in early development. The current MVP foundation is a React/Vite web app with
+automated tests and CI. The first local microphone permission and device-selection flow is now in
+place; deterministic DSP, visualization, and snapshots remain planned work.
 
 The first product goal is **Signal Health**:
 
@@ -30,8 +30,9 @@ The first product goal is **Signal Health**:
 - reproducible local snapshots;
 - clear next checks instead of unsupported gear-specific knob instructions.
 
-The MVP will be merged to `main` only after its automated checks, documentation, safety review, and
-macOS/Windows device gates pass. Feature work happens on branches and is reviewed before merge.
+The MVP will be merged to `main` only for a release, after its automated checks, documentation,
+safety review, and macOS/Windows device gates pass. Day-to-day integration happens on `develop`;
+feature work happens on short-lived branches and is reviewed before merging into `develop`.
 
 ### What is in scope
 
@@ -67,9 +68,9 @@ npm ci
 npm run dev
 ```
 
-Open the local URL shown by Vite. The current shell displays the Signal Health dashboard and does
-not request microphone permission yet. Audio permission will only be requested after an explicit
-user action in the relevant issue.
+Open the local URL shown by Vite. The Signal Health dashboard requests microphone permission only
+after you explicitly choose Start. The current flow keeps the stream local, shows the selected input
+and actual track settings, and allows you to stop the session.
 
 For Windows PowerShell:
 
@@ -101,6 +102,14 @@ npx playwright install chromium
 Use `npm install` only when intentionally changing dependencies. Commit the resulting
 `package-lock.json`; use `npm ci` for clean clones and CI.
 
+### Branching and releases
+
+- `develop` is the shared integration branch for reviewed feature work.
+- Use a short-lived feature or chore branch, then merge it into `develop` after checks pass.
+- `main` is reserved for release commits and is not the day-to-day integration target.
+- Do not mark a release ready until the automated checks, safety review, and required real-device
+  gates are recorded.
+
 ### Safe audio routing
 
 Start with the simplest supported path:
@@ -130,10 +139,10 @@ load box, DI, or another path explicitly approved by the equipment manufacturer.
 
 ### Roadmap
 
-1. Repository shell, reproducible build, tests, and CI.
-2. UI shell with empty, permission, device, and error states.
-3. Permission flow and device selection after a user click.
-4. Deterministic measurement engine with synthetic fixtures.
+1. Repository shell, reproducible build, tests, and CI. (complete)
+2. UI shell with empty, permission, device, and error states. (in progress)
+3. Permission flow and device selection after a user click. (implemented; real-device Gate pending)
+4. Deterministic measurement engine with synthetic fixtures. (next implementation target)
 5. Waveform, spectrum, spectrogram, and snapshots.
 6. Tone Compare, rule-based guidance, dry/wet comparison, and local session export.
 7. Desktop and extension companions only after browser limitations are demonstrated.
@@ -157,11 +166,12 @@ AI_HARNESS.md      AI development and review contract
 
 1. Read `README.md`, `AI_HARNESS.md`, and the relevant `PLAN.md` phase.
 2. Work on one small issue and one phase at a time.
-3. Add or update tests with code changes.
-4. Report `PASS`, `FAIL`, or `BLOCKED` with the environment and commands used.
-5. Keep real-device tests separate from synthetic and browser automation tests.
-6. Do not broaden scope into audio upload, unsafe routing, secrets, or unapproved dependencies.
-7. Do not mark a phase gate complete without explicit human verification.
+3. Use `develop` as the integration target; keep `main` for releases.
+4. Add or update tests with code changes.
+5. Report `PASS`, `FAIL`, or `BLOCKED` with the environment and commands used.
+6. Keep real-device tests separate from synthetic and browser automation tests.
+7. Do not broaden scope into audio upload, unsafe routing, secrets, or unapproved dependencies.
+8. Do not mark a phase gate complete without explicit human verification.
 
 Issues should include the OS, browser, interface, driver/firmware, sample rate, routing, steps,
 expected result, actual result, and sanitized evidence. Do not attach private recordings or secrets.
@@ -196,8 +206,8 @@ ToneCaptureDoctor는 기타·베이스 연주자가 다음 질문에 답할 수 
 ### 프로젝트 상태
 
 이 저장소는 초기 개발 단계입니다. 현재 MVP 기반은 자동 테스트와 CI를 포함한 React/Vite 웹
-shell입니다. 실제 마이크 권한 요청, 장치 선택, DSP는 이후 PLAN 이슈에서 구현하며 현재
-shell에는 포함되어 있지 않습니다.
+앱입니다. 첫 로컬 마이크 권한 요청과 장치 선택 흐름은 구현되었으며, 결정론적 DSP·시각화·
+스냅샷은 아직 계획된 작업입니다.
 
 첫 제품 목표는 **Signal Health**입니다.
 
@@ -207,8 +217,9 @@ shell에는 포함되어 있지 않습니다.
 - 재현 가능한 로컬 스냅샷;
 - 근거 없는 장비별 노브 지시 대신 다음 확인 방법 안내.
 
-MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤에만 `main`에
-병합합니다. 기능 개발은 작업 브랜치에서 진행하고 검토 후 병합합니다.
+MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤 release 시점에만
+`main`에 병합합니다. 일상적인 통합 대상은 `develop`이며, 기능 개발은 짧은 작업 브랜치에서
+진행한 뒤 검토 후 `develop`에 병합합니다.
 
 ### 포함 범위
 
@@ -244,9 +255,9 @@ npm ci
 npm run dev
 ```
 
-Vite가 표시한 로컬 주소를 브라우저에서 엽니다. 현재 shell은 Signal Health 대시보드를
-표시하지만 아직 마이크 권한을 요청하지 않습니다. 오디오 권한은 해당 이슈에서 사용자의
-명시적인 동작 뒤에만 요청합니다.
+Vite가 표시한 로컬 주소를 브라우저에서 엽니다. Signal Health 대시보드는 사용자가 Start를
+명시적으로 선택한 뒤에만 마이크 권한을 요청합니다. 현재 흐름은 스트림을 로컬에 유지하고,
+선택한 입력과 실제 track 설정을 표시하며, 세션을 중지할 수 있습니다.
 
 Windows PowerShell:
 
@@ -278,6 +289,14 @@ npx playwright install chromium
 의존성을 의도적으로 변경할 때만 `npm install`을 사용합니다. 생성된 `package-lock.json`을
 함께 커밋하고, 새 clone과 CI에서는 `npm ci`를 사용합니다.
 
+### 브랜치와 release
+
+- `develop`은 검토가 끝난 기능을 통합하는 공유 브랜치입니다.
+- 짧은 feature/chore 브랜치에서 작업하고 검증 후 `develop`에 병합합니다.
+- `main`은 release 커밋 전용이며 일상적인 통합 대상이 아닙니다.
+- 자동 검증, 안전 검토, 필요한 실제 장비 Gate가 기록되기 전에는 release 후보로 표시하지
+  않습니다.
+
 ### 안전한 오디오 연결
 
 가장 단순한 지원 경로에서 시작합니다.
@@ -307,10 +326,10 @@ DI 또는 장비 제조사가 명시적으로 허용한 경로를 사용합니�
 
 ### 로드맵
 
-1. 저장소 shell, 재현 가능한 빌드, 테스트, CI.
-2. 빈 상태·권한·장치·오류 상태를 포함한 UI shell.
-3. 사용자 클릭 이후 권한 요청과 장치 선택.
-4. 합성 fixture를 포함한 결정론적 측정 엔진.
+1. 저장소 shell, 재현 가능한 빌드, 테스트, CI. (완료)
+2. 빈 상태·권한·장치·오류 상태를 포함한 UI shell. (진행 중)
+3. 사용자 클릭 이후 권한 요청과 장치 선택. (구현 완료, 실제 장비 Gate 대기)
+4. 합성 fixture를 포함한 결정론적 측정 엔진. (다음 구현 목표)
 5. 파형·스펙트럼·스펙트로그램·스냅샷.
 6. Tone Compare, 규칙 기반 안내, dry/wet 비교, 로컬 세션 export.
 7. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
@@ -334,11 +353,12 @@ AI_HARNESS.md      AI 개발과 검토 계약
 
 1. `README.md`, `AI_HARNESS.md`, 해당 `PLAN.md` Phase를 읽습니다.
 2. 한 번에 하나의 작은 이슈와 하나의 Phase만 작업합니다.
-3. 코드 변경과 함께 테스트를 추가하거나 갱신합니다.
-4. 실행한 명령과 환경을 포함해 `PASS`, `FAIL`, `BLOCKED`로 보고합니다.
-5. 실제 장비 테스트와 합성·브라우저 자동 테스트를 분리합니다.
-6. 오디오 업로드, 위험한 라우팅, 비밀정보, 승인되지 않은 의존성으로 범위를 넓히지 않습니다.
-7. 사람의 명시적인 확인 없이 Phase Gate를 완료 처리하지 않습니다.
+3. `develop`을 통합 대상으로 사용하고 `main`은 release 전용으로 유지합니다.
+4. 코드 변경과 함께 테스트를 추가하거나 갱신합니다.
+5. 실행한 명령과 환경을 포함해 `PASS`, `FAIL`, `BLOCKED`로 보고합니다.
+6. 실제 장비 테스트와 합성·브라우저 자동 테스트를 분리합니다.
+7. 오디오 업로드, 위험한 라우팅, 비밀정보, 승인되지 않은 의존성으로 범위를 넓히지 않습니다.
+8. 사람의 명시적인 확인 없이 Phase Gate를 완료 처리하지 않습니다.
 
 이슈에는 OS, 브라우저, 인터페이스, 드라이버/펌웨어, 샘플레이트, 라우팅, 단계, 기대 결과,
 실제 결과, 개인정보가 제거된 증거를 포함합니다. 개인 녹음과 비밀정보는 첨부하지 않습니다.
