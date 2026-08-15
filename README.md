@@ -34,6 +34,13 @@ The analysis reliability pass now uses calibrated Hann power spectra, rolling We
 averaging, persistent harmonic 50/60 Hz checks, a multi-second noise-floor estimate, complete UI
 interval aggregation, and authoritative engine data for snapshots. Its definitions and research
 basis are documented in [`docs/analysis-engine.md`](docs/analysis-engine.md).
+Phase 8 adds Dry/Wet Doctor for two channels from one interface: frame-coordinate validation,
+cross-correlation latency candidates, gain/peak differences, dynamics and frequency-band deltas,
+and explicit no-signal, mono-like, and possible channel-swap warnings. Latency is labelled as
+measured or estimated, and the safe routing notes are bilingual in
+[`docs/routing/dry-wet-interface.md`](docs/routing/dry-wet-interface.md). Phase 9 has started with
+a production-only web manifest and same-origin offline shell; service-worker support and `.tonecheck`
+round-trip remain release gates.
 
 The first product goal is **Signal Health**:
 
@@ -52,7 +59,7 @@ feature work happens on short-lived branches and is reviewed before merging into
 - guitar/bass → audio interface input diagnostics;
 - local waveform and frequency analysis;
 - reference snapshots and A/B comparison;
-- dry/wet comparison after the basic input path is stable;
+- two-channel dry/wet comparison with latency and dynamics evidence;
 - export/import of local session data;
 - accessible explanations of terms such as dBFS, RMS, FFT, and noise floor.
 
@@ -168,7 +175,11 @@ load box, DI, or another path explicitly approved by the equipment manufacturer.
 5. Waveform, spectrum, spectrogram, snapshots, and local test-log export. (initial implementation; real-device Gate pending)
 6. Tone Compare and local session export. (initial comparison engine and UI implemented; synthetic and real-device validation remain)
 7. Bilingual glossary and evidence-linked rule-based guidance. (initial implementation; automated checks pass, usability and real-device validation remain)
-8. Desktop and extension companions only after browser limitations are demonstrated.
+8. Dry/Wet Doctor with two-channel evidence and safe routing guidance. (initial implementation;
+   real-interface Gate pending)
+9. Serverless PWA shell and `.tonecheck` session archive. (offline shell started; round-trip and
+   browser service-worker Gates pending)
+10. Desktop and extension companions only after browser limitations are demonstrated.
 
 See [`PLAN.md`](./PLAN.md) for acceptance criteria, manual gates, and the current issue order.
 Maintainers should also read [`AI_HARNESS.md`](./AI_HARNESS.md) and [`harness/`](./harness/).
@@ -176,10 +187,10 @@ Maintainers should also read [`AI_HARNESS.md`](./AI_HARNESS.md) and [`harness/`]
 ### Repository layout
 
 ```text
-apps/web/          React/Vite web app
-packages/          Shared audio, analysis, glossary, session, and UI packages (planned)
+apps/web/          React/Vite web app and AudioWorklet integrations
+packages/          Shared audio-core, comparison, rules, and glossary packages
 fixtures/          Synthetic or rights-cleared test assets (planned)
-docs/              Safety, routing, ADR, and testing documentation (planned)
+docs/              Safety, routing, analysis, ADR, and testing documentation
 harness/           AI workflow state, prompts, and sanitized verification reports
 PLAN.md            Product phases, acceptance criteria, and manual gates
 AI_HARNESS.md      AI development and review contract
@@ -250,6 +261,12 @@ Phase 7에서는 핵심 신호 용어의 한글·영어 glossary와 근거가 �
 고조파를 함께 보는 50/60 Hz 검사, 수 초 단위 noise-floor 추정, UI 보고 구간 전체 집계,
 분석 엔진의 권위 데이터를 사용한 스냅샷을 적용했습니다. 정의와 연구 근거는
 [`docs/analysis-engine.md`](docs/analysis-engine.md)에 기록했습니다.
+Phase 8에서는 하나의 인터페이스에서 두 채널을 받아 Dry/Wet Doctor를 구현했습니다. 프레임
+좌표 검증, cross-correlation 기반 지연 후보, gain/peak 차이, 다이내믹·주파수 대역 차이,
+무신호·모노 유사·채널 스왑 후보 경고를 제공하며 지연을 측정값과 추정값으로 구분합니다.
+안전한 라우팅 문서는 [`docs/routing/dry-wet-interface.md`](docs/routing/dry-wet-interface.md)에
+영어·한글로 기록했습니다. Phase 9는 production 전용 web manifest와 동일 출처 offline shell로
+시작했으며, service worker 환경 검증과 `.tonecheck` round-trip은 release Gate로 남아 있습니다.
 
 MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤 release 시점에만
 `main`에 병합합니다. 일상적인 통합 대상은 `develop`이며, 기능 개발은 짧은 작업 브랜치에서
@@ -260,7 +277,7 @@ MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를
 - 기타/베이스 → 오디오 인터페이스 입력 진단;
 - 로컬 파형·주파수 분석;
 - 기준 스냅샷과 A/B 비교;
-- 기본 입력 경로가 안정된 뒤 dry/wet 비교;
+- 두 채널 dry/wet 비교와 지연·다이내믹 근거;
 - 로컬 세션 export/import;
 - dBFS, RMS, FFT, noise floor 같은 용어의 접근 가능한 설명.
 
@@ -375,7 +392,10 @@ DI 또는 장비 제조사가 명시적으로 허용한 경로를 사용합니�
 5. 파형·스펙트럼·스펙트로그램·스냅샷·로컬 테스트 로그 export. (초기 구현, 실제 장비 Gate 대기)
 6. Tone Compare와 로컬 세션 export. (초기 비교 엔진·UI 구현, 합성·실제 장비 검증 대기)
 7. 한글·영어 glossary와 근거 연결 규칙 기반 안내. (초기 구현, 자동 검증 통과, 사용성·실제 장비 검증 대기)
-8. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
+8. 두 채널 근거와 안전 라우팅을 포함한 Dry/Wet Doctor. (초기 구현, 실제 오인페 Gate 대기)
+9. 서버리스 PWA shell과 `.tonecheck` 세션 archive. (offline shell 시작, round-trip·service worker
+   브라우저 Gate 대기)
+10. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
 
 수용 조건, 수동 Gate, 현재 이슈 순서는 [`PLAN.md`](./PLAN.md)를 확인합니다. 유지보수자와
 AI 작업자는 [`AI_HARNESS.md`](./AI_HARNESS.md)와 [`harness/`](./harness/)도 읽습니다.
@@ -383,10 +403,10 @@ AI 작업자는 [`AI_HARNESS.md`](./AI_HARNESS.md)와 [`harness/`](./harness/)�
 ### 저장소 구조
 
 ```text
-apps/web/          React/Vite 웹 앱
-packages/          공통 오디오·분석·용어·세션·UI 패키지 (예정)
+apps/web/          React/Vite 웹 앱과 AudioWorklet 통합
+packages/          공통 audio-core·비교·rules·glossary 패키지
 fixtures/          합성 또는 권리 확인 테스트 자산 (예정)
-docs/              안전·라우팅·ADR·테스트 문서 (예정)
+docs/              안전·라우팅·분석·ADR·테스트 문서
 harness/           AI 작업 상태·프롬프트·검증 보고서
 PLAN.md            제품 Phase·완료 조건·수동 Gate
 AI_HARNESS.md      AI 개발과 검토 계약
