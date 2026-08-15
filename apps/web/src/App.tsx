@@ -5,6 +5,7 @@ import {
   type AudioMetrics,
   type SnapshotComparison,
 } from '@tone-capture-doctor/audio-core';
+import { evaluateDiagnosticRules } from '@tone-capture-doctor/analysis-rules';
 
 import {
   AudioInputError,
@@ -24,6 +25,7 @@ import {
 } from './i18n';
 import { SignalVisualizer, type SignalFrameData } from './SignalVisualizer';
 import { SnapshotAudioPlayer } from './SnapshotAudioPlayer';
+import { GlossaryPanel } from './GlossaryPanel';
 import {
   createSessionId,
   deleteSnapshot,
@@ -498,6 +500,7 @@ export function App() {
     status,
   );
   const statusCopy = t.status[status];
+  const guidance = metrics ? evaluateDiagnosticRules(metrics, { warnings: session?.warnings }) : [];
 
   return (
     <main className="app-shell" data-testid="dashboard" lang={locale}>
@@ -715,6 +718,58 @@ export function App() {
             <p className="analysis-state">
               {analysisStatus === 'starting' ? t.analysis.starting : t.analysis.unavailable}
             </p>
+          )}
+        </article>
+
+        <article className="panel guidance-panel" aria-live="polite">
+          <p className="eyebrow">{t.guidance.eyebrow}</p>
+          <h3>{t.guidance.title}</h3>
+          {guidance.length === 0 ? (
+            <p className="analysis-state">{t.guidance.empty}</p>
+          ) : (
+            <div className="guidance-list">
+              {guidance.map((rule) => (
+                <section className="guidance-card" key={rule.id}>
+                  <div className="guidance-heading">
+                    <strong>{rule.observation[locale]}</strong>
+                    <span>
+                      {t.guidance.confidence}:{' '}
+                      {rule.confidence === 'high'
+                        ? t.guidance.confidenceHigh
+                        : rule.confidence === 'medium'
+                          ? t.guidance.confidenceMedium
+                          : t.guidance.confidenceLow}
+                    </span>
+                  </div>
+                  <div className="guidance-columns">
+                    <div>
+                      <strong>{t.guidance.causes}</strong>
+                      <ul>
+                        {rule.possibleCauses.map((cause, index) => (
+                          <li key={`${rule.id}-cause-${index}`}>{cause[locale]}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    <div>
+                      <strong>{t.guidance.experiments}</strong>
+                      <ul>
+                        {rule.experiments.map((experiment, index) => (
+                          <li key={`${rule.id}-experiment-${index}`}>{experiment[locale]}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  <div className="guidance-never-claim">
+                    <strong>{t.guidance.neverClaim}</strong>
+                    <ul>
+                      {rule.neverClaim.map((claim, index) => (
+                        <li key={`${rule.id}-claim-${index}`}>{claim[locale]}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </section>
+              ))}
+            </div>
           )}
         </article>
       </section>
@@ -977,6 +1032,10 @@ export function App() {
             </ul>
           )}
         </article>
+      </section>
+
+      <section className="phase7-grid" aria-label={t.glossary.title}>
+        <GlossaryPanel locale={locale} messages={t.glossary} />
       </section>
     </main>
   );

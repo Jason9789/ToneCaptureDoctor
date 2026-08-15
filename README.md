@@ -26,6 +26,10 @@ per-session test-log export. Real interface verification is still a manual relea
 The initial Tone Compare workflow is also available for saved snapshots: it reports loudness
 normalization, alignment, waveform/spectrum deltas, frequency-band changes, and confidence without
 assigning a universal tone score.
+Phase 7 adds a bilingual glossary for the core signal terms and evidence-linked, rule-based
+guidance. Guidance reports observations, possible causes, confidence, and reversible experiments;
+it does not claim a single physical cause or prescribe a universal tone adjustment. Usability and
+real-interface validation for this guidance remain open gates.
 
 The first product goal is **Signal Health**:
 
@@ -158,8 +162,9 @@ load box, DI, or another path explicitly approved by the equipment manufacturer.
 3. Permission flow and device selection after a user click. (implemented; real-device Gate pending)
 4. Deterministic measurement engine with synthetic fixtures. (initial engine implemented; long-run and real-device verification pending)
 5. Waveform, spectrum, spectrogram, snapshots, and local test-log export. (initial implementation; real-device Gate pending)
-6. Tone Compare, rule-based guidance, dry/wet comparison, and local session export. (initial comparison engine and UI implemented; synthetic and real-device validation remain)
-7. Desktop and extension companions only after browser limitations are demonstrated.
+6. Tone Compare and local session export. (initial comparison engine and UI implemented; synthetic and real-device validation remain)
+7. Bilingual glossary and evidence-linked rule-based guidance. (initial implementation; automated checks pass, usability and real-device validation remain)
+8. Desktop and extension companions only after browser limitations are demonstrated.
 
 See [`PLAN.md`](./PLAN.md) for acceptance criteria, manual gates, and the current issue order.
 Maintainers should also read [`AI_HARNESS.md`](./AI_HARNESS.md) and [`harness/`](./harness/).
@@ -232,6 +237,11 @@ import/export, 세션별 테스트 로그 export를 제공합니다. 실제 인�
 - peak/RMS, dBFS, noise floor, clipping 후보 측정;
 - 재현 가능한 로컬 스냅샷;
 - 근거 없는 장비별 노브 지시 대신 다음 확인 방법 안내.
+
+Phase 7에서는 핵심 신호 용어의 한글·영어 glossary와 근거가 연결된 규칙 기반 안내를
+추가했습니다. 안내는 관찰값, 가능한 원인, confidence, 되돌릴 수 있는 실험을 보여주며
+하나의 물리적 원인이나 보편적인 톤 조정을 단정하지 않습니다. 이 안내의 사용성 및 실제
+오인페이 검증은 아직 남은 Gate입니다.
 
 MVP는 자동 검증, 문서, 안전 검토, macOS/Windows 실제 장비 Gate를 통과한 뒤 release 시점에만
 `main`에 병합합니다. 일상적인 통합 대상은 `develop`이며, 기능 개발은 짧은 작업 브랜치에서
@@ -355,8 +365,9 @@ DI 또는 장비 제조사가 명시적으로 허용한 경로를 사용합니�
 3. 사용자 클릭 이후 권한 요청과 장치 선택. (구현 완료, 실제 장비 Gate 대기)
 4. 합성 fixture를 포함한 결정론적 측정 엔진. (초기 엔진 구현, 장시간·실제 장비 검증 대기)
 5. 파형·스펙트럼·스펙트로그램·스냅샷·로컬 테스트 로그 export. (초기 구현, 실제 장비 Gate 대기)
-6. Tone Compare, 규칙 기반 안내, dry/wet 비교, 로컬 세션 export. (초기 비교 엔진·UI 구현, 합성·실제 장비 검증 대기)
-7. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
+6. Tone Compare와 로컬 세션 export. (초기 비교 엔진·UI 구현, 합성·실제 장비 검증 대기)
+7. 한글·영어 glossary와 근거 연결 규칙 기반 안내. (초기 구현, 자동 검증 통과, 사용성·실제 장비 검증 대기)
+8. 브라우저 한계가 확인된 뒤 데스크톱·확장 companion.
 
 수용 조건, 수동 Gate, 현재 이슈 순서는 [`PLAN.md`](./PLAN.md)를 확인합니다. 유지보수자와
 AI 작업자는 [`AI_HARNESS.md`](./AI_HARNESS.md)와 [`harness/`](./harness/)도 읽습니다.

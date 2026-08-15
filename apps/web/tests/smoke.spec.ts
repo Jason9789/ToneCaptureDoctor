@@ -52,7 +52,7 @@ test('requests audio after Start and displays the local input session', async ({
 
   await expect(page.getByRole('status')).toHaveText('Connected');
   await expect(page.getByRole('combobox', { name: 'Choose an audio input' })).toBeVisible();
-  await expect(page.getByText('Sample rate')).toBeVisible();
+  await expect(page.getByText('Sample rate', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Stop Signal Health' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Stop Signal Health' }).click();

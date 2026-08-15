@@ -288,6 +288,63 @@ textarea {
   min-height: 220px;
 }
 
+.guidance-panel {
+  grid-column: 1 / -1;
+  min-height: 240px;
+}
+
+.guidance-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.guidance-card {
+  border: 1px solid rgba(231, 185, 121, 0.2);
+  border-radius: 0.9rem;
+  padding: 1rem;
+  background: rgba(57, 45, 29, 0.28);
+}
+
+.guidance-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.guidance-heading > span {
+  color: #f2ca8a;
+  font-size: 0.76rem;
+  text-align: right;
+}
+
+.guidance-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 0.8rem;
+}
+
+.guidance-columns strong,
+.guidance-never-claim strong {
+  color: #d4e6dd;
+  font-size: 0.78rem;
+}
+
+.guidance-columns ul,
+.guidance-never-claim ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  color: #a7bcb3;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.guidance-never-claim {
+  margin-top: 0.8rem;
+  border-top: 1px solid rgba(231, 185, 121, 0.16);
+  padding-top: 0.75rem;
+}
+
 .metrics-list {
   margin-top: 1rem;
 }
@@ -332,6 +389,93 @@ textarea {
   grid-template-columns: 1.2fr 0.8fr;
   gap: 1rem;
   margin-top: 1rem;
+}
+
+.phase7-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.glossary-panel {
+  min-height: 360px;
+}
+
+.glossary-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.8rem;
+}
+
+.glossary-entry {
+  margin-top: 1.25rem;
+  border-top: 1px solid rgba(155, 228, 193, 0.12);
+  padding-top: 1rem;
+}
+
+.glossary-entry h4 {
+  margin: 0 0 0.55rem;
+  color: #f5fbf7;
+  font-size: 1.15rem;
+}
+
+.glossary-entry > p {
+  margin-bottom: 1rem;
+}
+
+.glossary-definition {
+  display: grid;
+  gap: 0.7rem;
+  margin: 0;
+}
+
+.glossary-definition div {
+  border-left: 2px solid rgba(155, 228, 193, 0.35);
+  padding-left: 0.8rem;
+}
+
+.glossary-definition dt,
+.glossary-columns strong,
+.glossary-warning strong {
+  color: #9be4c1;
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.glossary-definition dd {
+  margin: 0.25rem 0 0;
+  color: #a7bcb3;
+  font-size: 0.85rem;
+  line-height: 1.55;
+}
+
+.glossary-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.glossary-list {
+  margin: 0.45rem 0 0;
+  padding-left: 1.1rem;
+  color: #a7bcb3;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.glossary-warning {
+  margin-top: 1rem;
+  border-radius: 0.7rem;
+  padding: 0.7rem 0.8rem;
+  background: rgba(239, 142, 132, 0.08);
+}
+
+.glossary-references {
+  display: block;
+  margin-top: 1rem;
+  color: #7fa394;
 }
 
 .visualizer-panel,
@@ -603,7 +747,10 @@ canvas {
 
   .hero,
   .dashboard-grid,
-  .phase5-grid {
+  .phase5-grid,
+  .glossary-controls,
+  .guidance-columns,
+  .glossary-columns {
     grid-template-columns: 1fr;
   }
 

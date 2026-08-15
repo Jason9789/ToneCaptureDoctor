@@ -105,6 +105,33 @@ export interface Messages {
     clippingInterpretation: string;
     band: string;
   };
+  glossary: {
+    causes: string;
+    experiments: string;
+    eyebrow: string;
+    measured: string;
+    noResults: string;
+    notMeasured: string;
+    references: string;
+    search: string;
+    searchPlaceholder: string;
+    term: string;
+    title: string;
+    warnings: string;
+  };
+  guidance: {
+    causes: string;
+    confidence: string;
+    confidenceHigh: string;
+    confidenceLow: string;
+    confidenceMedium: string;
+    empty: string;
+    experiments: string;
+    eyebrow: string;
+    neverClaim: string;
+    observation: string;
+    title: string;
+  };
   hero: {
     copy: string;
     eyebrow: string;
@@ -239,6 +266,33 @@ export const MESSAGES: Record<Locale, Messages> = {
       clippingInterpretation:
         'Possible interpretation: clipping can dominate the difference; lower input gain and capture again.',
       band: 'Band',
+    },
+    glossary: {
+      causes: 'Possible causes',
+      experiments: 'Safe next experiments',
+      eyebrow: 'Phase 7 · glossary',
+      measured: 'Measured by this app',
+      noResults: 'No glossary term matches this search.',
+      notMeasured: 'Not measured by this app',
+      references: 'Evidence',
+      search: 'Search terms',
+      searchPlaceholder: 'Try dBFS, noise, or latency',
+      term: 'Choose a term',
+      title: 'Audio glossary',
+      warnings: 'Safety notes',
+    },
+    guidance: {
+      causes: 'Possible causes',
+      confidence: 'Rule confidence',
+      confidenceHigh: 'High · directly reported setting or pattern',
+      confidenceLow: 'Low · candidate signal that needs a repeat',
+      confidenceMedium: 'Medium · useful measurement, not a diagnosis',
+      empty: 'No diagnostic rule matched. Repeat with a steady signal if you need more evidence.',
+      experiments: 'Safe next experiment',
+      eyebrow: 'Phase 7 · measured guidance',
+      neverClaim: 'This rule does not claim',
+      observation: 'Measured observation',
+      title: 'What to check next',
     },
     hero: {
       copy: 'Check whether an instrument signal is reaching your interface before comparing tones. The first release keeps analysis local and explains the next useful experiment.',
@@ -418,6 +472,33 @@ export const MESSAGES: Record<Locale, Messages> = {
       clippingInterpretation:
         '가능한 해석: 클리핑이 차이를 지배할 수 있습니다. 입력 게인을 낮추고 다시 캡처하세요.',
       band: '대역',
+    },
+    glossary: {
+      causes: '가능한 원인',
+      experiments: '안전한 다음 실험',
+      eyebrow: 'Phase 7 · 용어 사전',
+      measured: '이 앱이 측정하는 것',
+      noResults: '검색과 일치하는 용어가 없습니다.',
+      notMeasured: '이 앱이 측정하지 않는 것',
+      references: '근거',
+      search: '용어 검색',
+      searchPlaceholder: 'dBFS, 노이즈, latency 검색',
+      term: '용어 선택',
+      title: '오디오 용어 사전',
+      warnings: '안전 메모',
+    },
+    guidance: {
+      causes: '가능한 원인',
+      confidence: '규칙 신뢰도',
+      confidenceHigh: '높음 · 장치 설정 또는 패턴이 직접 보고됨',
+      confidenceLow: '낮음 · 반복 확인이 필요한 후보 신호',
+      confidenceMedium: '중간 · 유용한 측정 근거이지 진단은 아님',
+      empty: '일치하는 진단 규칙이 없습니다. 더 확인하려면 일정한 신호로 반복하세요.',
+      experiments: '안전한 다음 실험',
+      eyebrow: 'Phase 7 · 측정 기반 안내',
+      neverClaim: '이 규칙으로 단정하지 않는 것',
+      observation: '측정 관찰',
+      title: '다음에 확인할 것',
     },
     hero: {
       copy: '톤을 비교하기 전에 악기 신호가 인터페이스에 제대로 들어오는지 확인합니다. 첫 버전은 분석을 로컬에서 수행하고 다음에 해볼 실험을 설명합니다.',
