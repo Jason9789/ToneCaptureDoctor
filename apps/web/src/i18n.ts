@@ -83,11 +83,23 @@ export interface Messages {
     eyebrow: string;
   };
   visualizer: {
+    binWidth: string;
+    channels: string;
+    dominantFrequency: string;
+    fftSize: string;
+    frequencyScale: string;
     noSignal: string;
+    nyquist: string;
+    peak: string;
+    rms: string;
+    sampleRate: string;
     spectrum: string;
     spectrogram: string;
+    timeScale: string;
     timeWindow: string;
     title: string;
+    waveformScale: string;
+    window: string;
     waveform: string;
   };
   connection: {
@@ -308,11 +320,23 @@ export const MESSAGES: Record<Locale, Messages> = {
       eyebrow: 'Local evidence',
     },
     visualizer: {
+      binWidth: 'Bin width',
+      channels: 'Channels',
+      dominantFrequency: 'Dominant frequency',
+      fftSize: 'FFT size',
+      frequencyScale: 'Frequency · Hz',
       noSignal: 'Start Signal Health to see the local signal.',
+      nyquist: 'Nyquist',
+      peak: 'Peak',
+      rms: 'RMS',
+      sampleRate: 'Sample rate',
       spectrum: 'Spectrum · logarithmic frequency axis',
       spectrogram: 'Spectrogram',
+      timeScale: 'Time · ms',
       timeWindow: 'Waveform zoom',
       title: 'Signal view',
+      waveformScale: 'Amplitude · dBFS',
+      window: 'Window',
       waveform: 'Waveform',
     },
     connection: {
@@ -592,11 +616,23 @@ export const MESSAGES: Record<Locale, Messages> = {
       eyebrow: '로컬 증거',
     },
     visualizer: {
+      binWidth: 'Bin 폭',
+      channels: '채널',
+      dominantFrequency: '주요 주파수',
+      fftSize: 'FFT 크기',
+      frequencyScale: '주파수 · Hz',
       noSignal: 'Signal Health를 시작하면 로컬 신호를 볼 수 있습니다.',
+      nyquist: '나이퀴스트',
+      peak: 'Peak',
+      rms: 'RMS',
+      sampleRate: '샘플레이트',
       spectrum: '스펙트럼 · 로그 주파수 축',
       spectrogram: '스펙트로그램',
+      timeScale: '시간 · ms',
       timeWindow: '파형 확대',
       title: '신호 보기',
+      waveformScale: '진폭 · dBFS',
+      window: '윈도우',
       waveform: '파형',
     },
     connection: {

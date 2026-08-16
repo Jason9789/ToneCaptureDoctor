@@ -28,6 +28,9 @@ export interface AudioAnalysisErrorOptions extends ErrorOptions {
   diagnostics?: AudioAnalysisDiagnostic[];
 }
 
+const ANALYSER_MIN_DBFS = -100;
+const ANALYSER_MAX_DBFS = 0;
+
 export class AudioAnalysisError extends Error {
   readonly code: AudioAnalysisDiagnosticCode;
   readonly diagnostics: AudioAnalysisDiagnostic[];
@@ -187,6 +190,8 @@ async function startAudioWorkletAnalysis(
     analyser = context.createAnalyser();
     analyser.fftSize = 2048;
     analyser.smoothingTimeConstant = 0.8;
+    analyser.minDecibels = ANALYSER_MIN_DBFS;
+    analyser.maxDecibels = ANALYSER_MAX_DBFS;
     muteGain = context.createGain();
     muteGain.gain.value = 0;
 
@@ -253,6 +258,8 @@ async function startAnalyserFallback(
     analyser = context.createAnalyser();
     analyser.fftSize = 2_048;
     analyser.smoothingTimeConstant = 0;
+    analyser.minDecibels = ANALYSER_MIN_DBFS;
+    analyser.maxDecibels = ANALYSER_MAX_DBFS;
     muteGain = context.createGain();
     muteGain.gain.value = 0;
 

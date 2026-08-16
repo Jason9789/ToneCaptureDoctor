@@ -84,6 +84,14 @@ test('uses the AnalyserNode fallback when AudioWorklet is unavailable', async ({
       'Compatibility mode is active: live metrics are calculated with an AnalyserNode fallback.',
     ),
   ).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('canvas[role="img"]').nth(0)).toHaveAttribute(
+    'aria-label',
+    /Peak .* dBFS.*RMS .* dBFS/,
+  );
+  await expect(page.locator('canvas[role="img"]').nth(1)).toHaveAttribute(
+    'aria-label',
+    /Dominant frequency .* Hz/,
+  );
   await expect(page.getByRole('button', { name: 'Save snapshot' })).toBeEnabled();
 
   await page.getByRole('button', { name: 'Stop Signal Health' }).click();

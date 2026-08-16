@@ -1125,12 +1125,9 @@ export function App() {
           </div>
           <SignalVisualizer
             analyser={analysisNode}
+            labels={t.visualizer}
             locale={locale}
-            noSignalLabel={t.visualizer.noSignal}
-            spectrumLabel={t.visualizer.spectrum}
-            spectrogramLabel={t.visualizer.spectrogram}
-            timeWindowLabel={t.visualizer.timeWindow}
-            waveformLabel={t.visualizer.waveform}
+            metrics={metrics}
           />
         </article>
 
