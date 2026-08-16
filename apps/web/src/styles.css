@@ -372,6 +372,13 @@ textarea {
   color: #9be4c1;
 }
 
+.analysis-detail {
+  margin: 0.5rem 0 0;
+  color: #879e94;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
 .warning-list {
   margin: 1.25rem 0 0;
   padding-left: 1.1rem;

@@ -16,6 +16,9 @@ export const LOCALE_STORAGE_KEY = 'tone-capture-doctor.locale';
 export interface Messages {
   analysis: {
     active: string;
+    errorDetail: string;
+    fallback: string;
+    fallbackReason: string;
     unavailable: string;
     starting: string;
   };
@@ -237,6 +240,10 @@ export const MESSAGES: Record<Locale, Messages> = {
   en: {
     analysis: {
       active: 'Live metrics are calculated locally from the input stream.',
+      errorDetail: 'Diagnostic detail',
+      fallback:
+        'Compatibility mode is active: live metrics are calculated with an AnalyserNode fallback.',
+      fallbackReason: 'Fallback reason',
       unavailable: 'Live metrics are unavailable in this browser, but the input remains connected.',
       starting: 'Starting local measurement…',
     },
@@ -516,6 +523,9 @@ export const MESSAGES: Record<Locale, Messages> = {
   ko: {
     analysis: {
       active: '입력 스트림에서 실시간 지표를 브라우저 안에서 계산하고 있습니다.',
+      errorDetail: '진단 상세',
+      fallback: '호환 모드가 활성화되어 AnalyserNode fallback으로 실시간 지표를 계산하고 있습니다.',
+      fallbackReason: 'Fallback 전환 이유',
       unavailable: '이 브라우저에서는 실시간 지표를 사용할 수 없지만 입력 연결은 유지됩니다.',
       starting: '로컬 측정을 시작하는 중…',
     },

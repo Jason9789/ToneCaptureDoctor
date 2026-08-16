@@ -1,26 +1,60 @@
 import {
   AUDIO_WORKLET_PROCESSOR_NAME,
+  createAudioAnalyzer,
   type AudioMetrics,
   type DryWetAnalysisResult,
 } from '@tone-capture-doctor/audio-core';
 
 export type AudioAnalysisStatus = 'starting' | 'active' | 'unavailable';
+export type AudioAnalysisEngine = 'audio-worklet' | 'analyser-fallback';
+export type AudioAnalysisDiagnosticCode =
+  | 'audio-context-unavailable'
+  | 'worklet-unsupported'
+  | 'worklet-start-failed'
+  | 'fallback-start-failed'
+  | 'dry-wet-invalid-options'
+  | 'dry-wet-worklet-unsupported'
+  | 'dry-wet-start-failed'
+  | 'dry-wet-processor-error'
+  | 'unknown';
+
+export interface AudioAnalysisDiagnostic {
+  code: AudioAnalysisDiagnosticCode;
+  detail: string;
+}
+
+export interface AudioAnalysisErrorOptions extends ErrorOptions {
+  code?: AudioAnalysisDiagnosticCode;
+  diagnostics?: AudioAnalysisDiagnostic[];
+}
 
 export class AudioAnalysisError extends Error {
+  readonly code: AudioAnalysisDiagnosticCode;
+  readonly diagnostics: AudioAnalysisDiagnostic[];
   readonly status: AudioAnalysisStatus;
 
-  constructor(status: AudioAnalysisStatus, message: string, options?: ErrorOptions) {
+  constructor(status: AudioAnalysisStatus, message: string, options?: AudioAnalysisErrorOptions) {
     super(message, options);
     this.name = 'AudioAnalysisError';
+    this.code = options?.code ?? 'unknown';
+    this.diagnostics = options?.diagnostics ?? [];
     this.status = status;
   }
+}
+
+export interface AudioAnalysisFallback {
+  code: 'worklet-unsupported' | 'worklet-start-failed';
+  detail: string;
 }
 
 export interface AudioAnalysisSession {
   analyser: AnalyserNode;
   context: AudioContext;
+  engine: AudioAnalysisEngine;
+  fallback?: AudioAnalysisFallback;
   muteGain: GainNode;
-  node: AudioWorkletNode;
+  node?: AudioWorkletNode;
+  pollHandle?: number;
   source: MediaStreamAudioSourceNode;
 }
 
@@ -61,7 +95,57 @@ function hasAudioWorkletSupport(): boolean {
   );
 }
 
-export async function startAudioAnalysis(
+function createAudioContext(sampleRate?: number): AudioContext {
+  if (typeof AudioContext === 'undefined') {
+    throw new AudioAnalysisError(
+      'unavailable',
+      'This browser does not provide the Web Audio API.',
+      { code: 'audio-context-unavailable' },
+    );
+  }
+  return new AudioContext(sampleRate ? { sampleRate } : undefined);
+}
+
+function describeUnknownError(error: unknown): string {
+  if (error instanceof Error) {
+    const cause = 'cause' in error ? error.cause : undefined;
+    const causeText = cause instanceof Error ? `${cause.name}: ${cause.message}` : '';
+    return `${error.name}: ${error.message}${causeText ? ` | cause ${causeText}` : ''}`.slice(
+      0,
+      320,
+    );
+  }
+  return String(error).slice(0, 320);
+}
+
+export function describeAudioAnalysisError(error: unknown): string {
+  if (error instanceof AudioAnalysisError) {
+    if (error.diagnostics.length > 0) {
+      return error.diagnostics
+        .map((diagnostic) => diagnostic.detail)
+        .join(' | ')
+        .slice(0, 640);
+    }
+    const cause = 'cause' in error ? error.cause : undefined;
+    return `${error.message}${cause ? ` | cause ${describeUnknownError(cause)}` : ''}`.slice(
+      0,
+      640,
+    );
+  }
+  return describeUnknownError(error);
+}
+
+function audioAnalysisDiagnostic(
+  error: unknown,
+  fallbackCode: AudioAnalysisDiagnosticCode = 'unknown',
+): AudioAnalysisDiagnostic {
+  if (error instanceof AudioAnalysisError && error.diagnostics.length > 0) {
+    return error.diagnostics[0] ?? { code: error.code, detail: describeUnknownError(error) };
+  }
+  return { code: fallbackCode, detail: describeUnknownError(error) };
+}
+
+async function startAudioWorkletAnalysis(
   stream: MediaStream,
   onMetrics: AudioMetricsHandler,
   options: AudioAnalysisOptions = {},
@@ -70,12 +154,23 @@ export async function startAudioAnalysis(
     throw new AudioAnalysisError(
       'unavailable',
       'This browser does not support local AudioWorklet measurement.',
+      { code: 'worklet-unsupported' },
     );
   }
 
-  const context = new AudioContext(
-    options.sampleRate ? { sampleRate: options.sampleRate } : undefined,
-  );
+  let context: AudioContext;
+  try {
+    context = createAudioContext(options.sampleRate);
+  } catch (error) {
+    if (error instanceof AudioAnalysisError) {
+      throw error;
+    }
+    throw new AudioAnalysisError(
+      'unavailable',
+      'The browser could not create a local audio context.',
+      { cause: error, code: 'audio-context-unavailable' },
+    );
+  }
   let source: MediaStreamAudioSourceNode | undefined;
   let node: AudioWorkletNode | undefined;
   let analyser: AnalyserNode | undefined;
@@ -104,7 +199,7 @@ export async function startAudioAnalysis(
     muteGain.connect(context.destination);
     await context.resume();
 
-    return { analyser, context, muteGain, node, source };
+    return { analyser, context, engine: 'audio-worklet', muteGain, node, source };
   } catch (error) {
     source?.disconnect();
     node?.disconnect();
@@ -114,7 +209,156 @@ export async function startAudioAnalysis(
     throw new AudioAnalysisError(
       'unavailable',
       'The browser could not start local measurement. The input connection can remain active.',
-      { cause: error },
+      {
+        cause: error,
+        code: 'worklet-start-failed',
+        diagnostics: [
+          {
+            code: 'worklet-start-failed',
+            detail: describeUnknownError(error),
+          },
+        ],
+      },
+    );
+  }
+}
+
+async function startAnalyserFallback(
+  stream: MediaStream,
+  onMetrics: AudioMetricsHandler,
+  options: AudioAnalysisOptions,
+  fallback: AudioAnalysisFallback,
+): Promise<AudioAnalysisSession> {
+  let context: AudioContext;
+  try {
+    context = createAudioContext(options.sampleRate);
+  } catch (error) {
+    if (error instanceof AudioAnalysisError) {
+      throw error;
+    }
+    throw new AudioAnalysisError(
+      'unavailable',
+      'The browser could not create the compatibility audio context.',
+      { cause: error, code: 'fallback-start-failed' },
+    );
+  }
+
+  let source: MediaStreamAudioSourceNode | undefined;
+  let analyser: AnalyserNode | undefined;
+  let muteGain: GainNode | undefined;
+  let pollHandle: number | undefined;
+
+  try {
+    source = context.createMediaStreamSource(stream);
+    analyser = context.createAnalyser();
+    analyser.fftSize = 2_048;
+    analyser.smoothingTimeConstant = 0;
+    muteGain = context.createGain();
+    muteGain.gain.value = 0;
+
+    const frame = new Float32Array(analyser.fftSize);
+    const analyzer = createAudioAnalyzer({
+      fftSize: analyser.fftSize,
+      sampleRate: context.sampleRate,
+    });
+    const poll = () => {
+      analyser?.getFloatTimeDomainData(frame);
+      onMetrics(analyzer.pushFrame([frame]));
+    };
+
+    source.connect(analyser);
+    // Keep the graph alive without sending the microphone back to the speakers.
+    analyser.connect(muteGain);
+    muteGain.connect(context.destination);
+    await context.resume();
+    poll();
+    pollHandle = window.setInterval(poll, 1_000 / 30);
+
+    return {
+      analyser,
+      context,
+      engine: 'analyser-fallback',
+      fallback,
+      muteGain,
+      pollHandle,
+      source,
+    };
+  } catch (error) {
+    if (pollHandle !== undefined) {
+      window.clearInterval(pollHandle);
+    }
+    source?.disconnect();
+    analyser?.disconnect();
+    muteGain?.disconnect();
+    await context.close().catch(() => undefined);
+    throw new AudioAnalysisError(
+      'unavailable',
+      'The browser could not start compatibility measurement. The input connection can remain active.',
+      {
+        cause: error,
+        code: 'fallback-start-failed',
+        diagnostics: [
+          fallback,
+          {
+            code: 'fallback-start-failed',
+            detail: describeUnknownError(error),
+          },
+        ],
+      },
+    );
+  }
+}
+
+export async function startAudioAnalysis(
+  stream: MediaStream,
+  onMetrics: AudioMetricsHandler,
+  options: AudioAnalysisOptions = {},
+): Promise<AudioAnalysisSession> {
+  let workletFailure: AudioAnalysisError;
+  try {
+    return await startAudioWorkletAnalysis(stream, onMetrics, options);
+  } catch (error) {
+    workletFailure =
+      error instanceof AudioAnalysisError
+        ? error
+        : new AudioAnalysisError(
+            'unavailable',
+            'The browser could not start AudioWorklet measurement.',
+            { cause: error, code: 'worklet-start-failed' },
+          );
+  }
+
+  const fallbackCode: AudioAnalysisFallback['code'] =
+    workletFailure.code === 'worklet-unsupported' ? 'worklet-unsupported' : 'worklet-start-failed';
+  const fallback: AudioAnalysisFallback = {
+    code: fallbackCode,
+    detail: describeAudioAnalysisError(workletFailure),
+  };
+
+  try {
+    return await startAnalyserFallback(stream, onMetrics, options, fallback);
+  } catch (error) {
+    const fallbackFailure =
+      error instanceof AudioAnalysisError
+        ? error
+        : new AudioAnalysisError(
+            'unavailable',
+            'The browser could not start compatibility measurement.',
+            { cause: error, code: 'fallback-start-failed' },
+          );
+    throw new AudioAnalysisError(
+      'unavailable',
+      'The browser could not start local measurement. The input connection can remain active.',
+      {
+        cause: fallbackFailure,
+        code: 'fallback-start-failed',
+        diagnostics: [
+          audioAnalysisDiagnostic(workletFailure, workletFailure.code),
+          ...(fallbackFailure.diagnostics.length > 0
+            ? fallbackFailure.diagnostics
+            : [audioAnalysisDiagnostic(fallbackFailure, 'fallback-start-failed')]),
+        ],
+      },
     );
   }
 }
@@ -128,6 +372,7 @@ export async function startDryWetAnalysis(
     throw new AudioAnalysisError(
       'unavailable',
       'This browser does not support local dry/wet measurement.',
+      { code: 'dry-wet-worklet-unsupported' },
     );
   }
   if (
@@ -137,12 +382,12 @@ export async function startDryWetAnalysis(
     options.wetChannelIndex < 0 ||
     options.dryChannelIndex === options.wetChannelIndex
   ) {
-    throw new AudioAnalysisError('unavailable', 'Dry and wet channels must be different inputs.');
+    throw new AudioAnalysisError('unavailable', 'Dry and wet channels must be different inputs.', {
+      code: 'dry-wet-invalid-options',
+    });
   }
 
-  const context = new AudioContext(
-    options.sampleRate ? { sampleRate: options.sampleRate } : undefined,
-  );
+  const context = createAudioContext(options.sampleRate);
   let source: MediaStreamAudioSourceNode | undefined;
   let node: AudioWorkletNode | undefined;
   let muteGain: GainNode | undefined;
@@ -190,7 +435,9 @@ export async function startDryWetAnalysis(
         });
       } else if (event.data.kind === 'error') {
         options.onError?.(
-          new AudioAnalysisError('unavailable', event.data.message ?? 'Dry/wet analysis failed.'),
+          new AudioAnalysisError('unavailable', event.data.message ?? 'Dry/wet analysis failed.', {
+            code: 'dry-wet-processor-error',
+          }),
         );
       }
     };
@@ -208,15 +455,29 @@ export async function startDryWetAnalysis(
     throw new AudioAnalysisError(
       'unavailable',
       'The browser could not start dry/wet measurement. The input connection can remain active.',
-      { cause: error },
+      {
+        cause: error,
+        code: 'dry-wet-start-failed',
+        diagnostics: [
+          {
+            code: 'dry-wet-start-failed',
+            detail: describeUnknownError(error),
+          },
+        ],
+      },
     );
   }
 }
 
 export async function stopAudioAnalysis(session: AudioAnalysisSession): Promise<void> {
-  session.node.port.onmessage = null;
+  if (session.pollHandle !== undefined) {
+    window.clearInterval(session.pollHandle);
+  }
+  if (session.node) {
+    session.node.port.onmessage = null;
+  }
   session.source.disconnect();
-  session.node.disconnect();
+  session.node?.disconnect();
   session.analyser.disconnect();
   session.muteGain.disconnect();
   await session.context.close().catch(() => undefined);

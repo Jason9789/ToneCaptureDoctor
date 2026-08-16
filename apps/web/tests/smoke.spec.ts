@@ -59,6 +59,37 @@ test('requests audio after Start and displays the local input session', async ({
   await expect(page.getByRole('status')).toHaveText('Stopped');
 });
 
+test('uses the AnalyserNode fallback when AudioWorklet is unavailable', async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      Object.defineProperty(window, 'AudioWorkletNode', {
+        configurable: true,
+        value: undefined,
+      });
+      Object.defineProperty(AudioContext.prototype, 'audioWorklet', {
+        configurable: true,
+        value: undefined,
+      });
+    } catch {
+      // The capability check remains the source of truth if the browser protects these fields.
+    }
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Start Signal Health' }).click();
+
+  await expect(page.getByRole('status')).toHaveText('Connected');
+  await expect(
+    page.getByText(
+      'Compatibility mode is active: live metrics are calculated with an AnalyserNode fallback.',
+    ),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('button', { name: 'Save snapshot' })).toBeEnabled();
+
+  await page.getByRole('button', { name: 'Stop Signal Health' }).click();
+  await expect(page.getByRole('status')).toHaveText('Stopped');
+});
+
 test('keeps the dashboard usable at compact widths and updates document language', async ({
   page,
 }) => {

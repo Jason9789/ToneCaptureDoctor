@@ -8,13 +8,18 @@ values are suitable for drawing, but they are not persisted or used for diagnosi
 
 1. `AudioWorkletProcessor` receives each browser render quantum and sends every channel to
    `audio-core`.
-2. The engine keeps cumulative sample coordinates and preallocated per-channel ring buffers.
-3. Peak, RMS, and clipping are calculated for every quantum. FFT work runs every 1,024 samples,
+2. If `AudioWorklet` is unavailable or cannot initialize, Signal Health uses an `AnalyserNode`
+   compatibility path. It polls float time-domain frames at approximately 30 Hz and feeds them
+   into the same deterministic `audio-core` analyzer. The session log records the selected engine
+   and the sanitized fallback reason. Dry/Wet Doctor remains AudioWorklet-only because it requires
+   synchronized two-channel frames.
+3. The engine keeps cumulative sample coordinates and preallocated per-channel ring buffers.
+4. Peak, RMS, and clipping are calculated for every quantum. FFT work runs every 1,024 samples,
    using the latest 2,048 samples.
-4. `AudioMetricsAccumulator` combines all quanta in each 30 Hz UI reporting interval. It keeps the
+5. `AudioMetricsAccumulator` combines all quanta in each 30 Hz UI reporting interval. It keeps the
    maximum peak, sample-weighted RMS, clipping count, and any clipping candidate seen in the
    interval.
-5. The UI receives summary metrics. A snapshot may be saved only after the engine has produced an
+6. The UI receives summary metrics. A snapshot may be saved only after the engine has produced an
    authoritative waveform and spectrum.
 
 `sampleCount`, `reportStartSample`, `reportEndSample`, `analysisFrameStartSample`,
@@ -51,8 +56,9 @@ band ratios using `10 log10`. Waveforms are RMS-normalized and lag-aligned separ
 ## Research basis and implementation boundary
 
 - The [Web Audio API specification](https://www.w3.org/TR/webaudio-1.1/) defines byte-frequency
-  data as clipped dB values mapped to 0–255 and describes render quanta. This is why `AnalyserNode`
-  is display-only here.
+  data as clipped dB values mapped to 0–255 and describes render quanta. The primary path therefore
+  uses AudioWorklet samples; the fallback uses `AnalyserNode.getFloatTimeDomainData()` only when
+  the primary path cannot run and is labelled as a compatibility measurement.
 - F. J. Harris, [“On the Use of Windows for Harmonic Analysis with the Discrete Fourier
   Transform”](https://doi.org/10.1109/PROC.1978.10837), supports the explicit Hann window and
   window-energy calibration.
@@ -77,5 +83,6 @@ opposite-polarity stereo, persistent 50/60 Hz harmonic hum, 41.2/82.4 Hz false-p
 broadband noise, tonal noise-floor rejection, interval aggregation, and malformed comparison data.
 
 Actual audio-interface behavior, browser scheduling under long sessions, analog noise, clock drift,
-and macOS/Windows device variation remain human/device gates. Exported test logs include sample-time
-coordinates and confidence values so those runs can be analyzed later without uploading raw audio.
+fallback scheduling under long sessions, and macOS/Windows device variation remain human/device
+gates. Exported test logs include sample-time coordinates, confidence values, analysis engine, and
+fallback diagnostics so those runs can be analyzed later without uploading raw audio.

@@ -17,6 +17,9 @@ import {
   stopAudioStream,
 } from './audioInput';
 import {
+  AudioAnalysisError,
+  describeAudioAnalysisError,
+  type AudioAnalysisEngine,
   startAudioAnalysis,
   startDryWetAnalysis,
   type AudioAnalysisSession,
@@ -115,6 +118,8 @@ export function App() {
   const [analysisStatus, setAnalysisStatus] = useState<'starting' | 'active' | 'unavailable'>(
     'unavailable',
   );
+  const [analysisEngine, setAnalysisEngine] = useState<AudioAnalysisEngine | null>(null);
+  const [analysisDiagnostic, setAnalysisDiagnostic] = useState<string | null>(null);
   const [connectionNotice, setConnectionNotice] = useState<keyof Messages['connection'] | null>(
     null,
   );
@@ -212,6 +217,8 @@ export function App() {
       setSession(nextSession);
       setMetrics(null);
       setAnalysisStatus('starting');
+      setAnalysisEngine(null);
+      setAnalysisDiagnostic(null);
       setConnectionNotice(null);
       resetDryWetState();
       setDryWetStatus((nextSession.settings.channelCount ?? 0) >= 2 ? 'starting' : 'unavailable');
@@ -267,6 +274,8 @@ export function App() {
     setSession(null);
     setMetrics(null);
     setAnalysisStatus('unavailable');
+    setAnalysisEngine(null);
+    setAnalysisDiagnostic(null);
     setConnectionNotice(null);
     resetDryWetState();
     setDryWetStatus('unavailable');
@@ -334,11 +343,26 @@ export function App() {
         }
         analysisRef.current = nextAnalysis;
         setAnalysisNode(nextAnalysis.analyser);
+        setAnalysisEngine(nextAnalysis.engine);
+        setAnalysisDiagnostic(nextAnalysis.fallback?.detail ?? null);
+        writer.append('status', {
+          analysisEngine: nextAnalysis.engine,
+          analysisFallbackCode: nextAnalysis.fallback?.code,
+          analysisFallbackDetail: nextAnalysis.fallback?.detail,
+        });
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
           setAnalysisStatus('unavailable');
           setAnalysisNode(null);
+          setAnalysisEngine(null);
+          const diagnostic = describeAudioAnalysisError(error);
+          setAnalysisDiagnostic(diagnostic.slice(0, 640));
+          writer.append('status', {
+            analysisEngine: 'unavailable',
+            analysisError: diagnostic.slice(0, 640),
+            analysisErrorCode: error instanceof AudioAnalysisError ? error.code : 'unknown',
+          });
         }
       });
 
@@ -382,10 +406,16 @@ export function App() {
       },
       {
         dryChannelIndex: dryWetDryChannelIndex,
-        onError: () => {
+        onError: (error) => {
           if (!cancelled) {
             setDryWetStatus('unavailable');
           }
+          const diagnostic = describeAudioAnalysisError(error);
+          logWriterRef.current?.append('status', {
+            analysisEngine: 'dry-wet',
+            analysisError: diagnostic,
+            analysisErrorCode: error.code,
+          });
         },
         onStatus: (nextStatus) => {
           if (!cancelled) {
@@ -403,10 +433,16 @@ export function App() {
         }
         dryWetAnalysisRef.current = nextAnalysis;
       })
-      .catch(() => {
+      .catch((error: unknown) => {
         if (!cancelled) {
           setDryWetStatus('unavailable');
         }
+        const diagnostic = describeAudioAnalysisError(error);
+        logWriterRef.current?.append('status', {
+          analysisEngine: 'dry-wet',
+          analysisError: diagnostic,
+          analysisErrorCode: error instanceof AudioAnalysisError ? error.code : 'unknown',
+        });
       });
 
     return () => {
@@ -436,6 +472,8 @@ export function App() {
       setSession(null);
       setMetrics(null);
       setAnalysisStatus('unavailable');
+      setAnalysisEngine(null);
+      setAnalysisDiagnostic(null);
       setConnectionNotice(null);
       setDryWetResult(null);
       setDryWetStatus('unavailable');
@@ -468,6 +506,8 @@ export function App() {
             setSession(null);
             setMetrics(null);
             setAnalysisStatus('unavailable');
+            setAnalysisEngine(null);
+            setAnalysisDiagnostic(null);
             setConnectionNotice(null);
             resetDryWetState();
             setDryWetStatus('unavailable');
@@ -931,8 +971,13 @@ export function App() {
           ) : metrics ? (
             <>
               <p className="analysis-state analysis-state-active" aria-live="polite">
-                {t.analysis.active}
+                {analysisEngine === 'analyser-fallback' ? t.analysis.fallback : t.analysis.active}
               </p>
+              {analysisEngine === 'analyser-fallback' && analysisDiagnostic && (
+                <p className="analysis-detail">
+                  {t.analysis.fallbackReason}: {analysisDiagnostic}
+                </p>
+              )}
               <dl className="settings-list metrics-list">
                 <div>
                   <dt>{t.metrics.peak}</dt>
@@ -988,9 +1033,16 @@ export function App() {
               )}
             </>
           ) : (
-            <p className="analysis-state">
-              {analysisStatus === 'starting' ? t.analysis.starting : t.analysis.unavailable}
-            </p>
+            <>
+              <p className="analysis-state">
+                {analysisStatus === 'starting' ? t.analysis.starting : t.analysis.unavailable}
+              </p>
+              {analysisDiagnostic && (
+                <p className="analysis-detail">
+                  {t.analysis.errorDetail}: {analysisDiagnostic}
+                </p>
+              )}
+            </>
           )}
         </article>
 
