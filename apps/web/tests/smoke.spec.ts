@@ -98,6 +98,65 @@ test('uses the AnalyserNode fallback when AudioWorklet is unavailable', async ({
   await expect(page.getByRole('status')).toHaveText('Stopped');
 });
 
+test('saves a playable audio clip with a positive duration', async ({ page }) => {
+  await page.addInitScript(() => {
+    try {
+      Object.defineProperty(window, 'AudioWorkletNode', {
+        configurable: true,
+        value: undefined,
+      });
+      Object.defineProperty(AudioContext.prototype, 'audioWorklet', {
+        configurable: true,
+        value: undefined,
+      });
+    } catch {
+      // The fallback remains the source of truth if the browser protects these fields.
+    }
+    try {
+      Object.defineProperty(AnalyserNode.prototype, 'getFloatTimeDomainData', {
+        configurable: true,
+        value: (buffer: Float32Array) => {
+          for (let index = 0; index < buffer.length; index += 1) {
+            buffer[index] = 0.2 * Math.sin((2 * Math.PI * 440 * index) / 44_100);
+          }
+        },
+      });
+    } catch {
+      // The fake input may remain silent if the browser protects analyser methods.
+    }
+  });
+
+  await page.goto('/');
+  await page.getByRole('button', { name: 'Start Signal Health' }).click();
+
+  await expect(page.getByRole('status')).toHaveText('Connected');
+  await expect(page.getByRole('button', { name: 'Save snapshot' })).toBeEnabled({
+    timeout: 10_000,
+  });
+  await page.waitForTimeout(1_000);
+  await page.getByRole('button', { name: 'Save snapshot' }).click();
+
+  await expect(
+    page.getByRole('status').filter({
+      hasText: 'A short local audio clip is attached to this snapshot.',
+    }),
+  ).toBeVisible({ timeout: 10_000 });
+  await page.getByRole('button', { name: 'Stop Signal Health' }).click();
+  await expect(page.locator('.status-pill')).toHaveText('Stopped');
+  await page.reload();
+  await expect(page.locator('audio')).toHaveCount(1, { timeout: 10_000 });
+  await expect
+    .poll(
+      () =>
+        page.locator('audio').evaluate((element) => {
+          const audio = element as HTMLAudioElement;
+          return Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+        }),
+      { timeout: 10_000 },
+    )
+    .toBeGreaterThan(0);
+});
+
 test('keeps the dashboard usable at compact widths and updates document language', async ({
   page,
 }) => {

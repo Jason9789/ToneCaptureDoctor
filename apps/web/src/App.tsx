@@ -321,7 +321,6 @@ export function App() {
       },
     );
     logWriterRef.current = writer;
-    clipCaptureRef.current = startAudioClipCapture(session.stream);
     const startPromise = writer.start().catch(() => setNotice({ area: 'snapshots', key: 'error' }));
     logWriterStartRef.current = startPromise;
 
@@ -341,6 +340,9 @@ export function App() {
           void stopAudioAnalysis(nextAnalysis);
           return;
         }
+        clipCaptureRef.current = startAudioClipCapture(session.stream, {
+          sampleRate: session.settings.sampleRate,
+        });
         analysisRef.current = nextAnalysis;
         setAnalysisNode(nextAnalysis.analyser);
         setAnalysisEngine(nextAnalysis.engine);
@@ -565,7 +567,8 @@ export function App() {
     }
 
     try {
-      const audioClip = await clipCaptureRef.current?.getRecentClip();
+      const audioCapture = clipCaptureRef.current;
+      const audioClip = await audioCapture?.getRecentClip();
       const snapshot: SnapshotRecord = {
         algorithmVersion: metrics.algorithmVersion,
         ...(audioClip ? { audioClip } : {}),
@@ -605,7 +608,14 @@ export function App() {
       await refreshSnapshots();
       setSnapshotLabel('');
       setSnapshotNotes('');
-      setNotice({ area: 'snapshots', key: audioClip ? 'audioClipSaved' : 'saved' });
+      setNotice({
+        area: 'snapshots',
+        key: audioClip
+          ? 'audioClipSaved'
+          : audioCapture
+            ? 'audioClipNotReady'
+            : 'audioClipUnavailable',
+      });
     } catch (error) {
       setNotice({
         area: 'snapshots',
@@ -1378,6 +1388,7 @@ export function App() {
                         audioClip={snapshot.audioClip}
                         clipEndLabel={t.snapshots.clipEnd}
                         clipStartLabel={t.snapshots.clipStart}
+                        invalidClipLabel={t.snapshots.audioClipInvalid}
                         pauseLabel={t.snapshots.pauseClip}
                         playLabel={t.snapshots.playClip}
                         selectionLabel={t.snapshots.clipSelection}

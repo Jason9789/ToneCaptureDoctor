@@ -4,6 +4,7 @@ interface SnapshotAudioPlayerProps {
   audioClip: Blob;
   clipEndLabel: string;
   clipStartLabel: string;
+  invalidClipLabel: string;
   pauseLabel: string;
   playLabel: string;
   selectionLabel: string;
@@ -13,6 +14,7 @@ export function SnapshotAudioPlayer({
   audioClip,
   clipEndLabel,
   clipStartLabel,
+  invalidClipLabel,
   pauseLabel,
   playLabel,
   selectionLabel,
@@ -23,6 +25,7 @@ export function SnapshotAudioPlayer({
   const [selectionStart, setSelectionStart] = useState(0);
   const [selectionEnd, setSelectionEnd] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [hasInvalidDuration, setHasInvalidDuration] = useState(false);
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -34,9 +37,11 @@ export function SnapshotAudioPlayer({
 
   const handleMetadata = useCallback(() => {
     const nextDuration = audioRef.current?.duration;
-    if (!nextDuration || !Number.isFinite(nextDuration)) {
+    if (!nextDuration || !Number.isFinite(nextDuration) || nextDuration <= 0) {
+      setHasInvalidDuration(true);
       return;
     }
+    setHasInvalidDuration(false);
     setDuration(nextDuration);
     setSelectionStart((current) => Math.min(current, nextDuration));
     setSelectionEnd((current) => (current <= 0 ? nextDuration : Math.min(current, nextDuration)));
@@ -69,10 +74,12 @@ export function SnapshotAudioPlayer({
         preload="metadata"
         src={sourceUrl}
         onLoadedMetadata={handleMetadata}
+        onError={() => setHasInvalidDuration(true)}
         onPause={() => setIsPlaying(false)}
         onPlay={() => setIsPlaying(true)}
         onTimeUpdate={handleTimeUpdate}
       />
+      {hasInvalidDuration && <p role="alert">{invalidClipLabel}</p>}
       <div className="clip-selection-heading">
         <strong>{selectionLabel}</strong>
         <button

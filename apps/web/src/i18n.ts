@@ -49,6 +49,8 @@ export interface Messages {
     title: string;
   };
   snapshots: {
+    audioClipInvalid: string;
+    audioClipNotReady: string;
     audioClipSaved: string;
     audioClipUnavailable: string;
     delete: string;
@@ -286,6 +288,8 @@ export const MESSAGES: Record<Locale, Messages> = {
       title: 'Signal metrics',
     },
     snapshots: {
+      audioClipInvalid: 'This audio clip has no readable duration. Record a new snapshot.',
+      audioClipNotReady: 'No audio clip is ready yet. Keep the input running and save again.',
       audioClipSaved: 'A short local audio clip is attached to this snapshot.',
       audioClipUnavailable: 'Audio clip capture is unavailable in this browser.',
       delete: 'Delete',
@@ -581,6 +585,8 @@ export const MESSAGES: Record<Locale, Messages> = {
       title: '신호 지표',
     },
     snapshots: {
+      audioClipInvalid: '이 오디오 클립의 재생 시간을 읽을 수 없습니다. 새 스냅샷을 저장하세요.',
+      audioClipNotReady: '아직 저장할 오디오 구간이 없습니다. 입력을 유지한 뒤 다시 저장하세요.',
       audioClipSaved: '짧은 로컬 오디오 클립이 이 스냅샷에 첨부되었습니다.',
       audioClipUnavailable: '이 브라우저에서는 오디오 클립 캡처를 사용할 수 없습니다.',
       delete: '삭제',

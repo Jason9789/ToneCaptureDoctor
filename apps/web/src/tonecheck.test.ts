@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { encodeWav } from './audioClip';
 import {
   clearAllLocalData,
   createSessionId,
@@ -54,10 +55,7 @@ function createFixture(id: string, audioClip?: Blob): SnapshotRecord {
 
 describe('.tonecheck archive', () => {
   it('round-trips snapshot metadata, checksums, and an audio asset', async () => {
-    const audioClip = new Blob(['wav-fixture'], { type: 'audio/wav' });
-    Object.defineProperty(audioClip, 'arrayBuffer', {
-      value: async () => new TextEncoder().encode('wav-fixture').buffer,
-    });
+    const audioClip = encodeWav([new Float32Array(4_800).fill(0.25)], 48_000);
     const snapshot = createFixture('tonecheck-round-trip', audioClip);
     await saveSnapshot(snapshot);
     const sessionId = createSessionId();
@@ -95,7 +93,7 @@ describe('.tonecheck archive', () => {
       spectrumUnit: 'power-per-bin',
     });
     expect(imported?.audioClip?.type).toBe('audio/wav');
-    expect(imported?.audioClip?.size).toBe('wav-fixture'.length);
+    expect(imported?.audioClip?.size).toBe(audioClip.size);
     expect((await exportTestLog(sessionId)).events).toEqual(
       expect.arrayContaining([expect.objectContaining({ eventType: 'status' })]),
     );
