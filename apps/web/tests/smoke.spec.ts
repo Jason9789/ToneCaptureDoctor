@@ -94,6 +94,17 @@ test('uses the AnalyserNode fallback when AudioWorklet is unavailable', async ({
   );
   await expect(page.getByRole('button', { name: 'Save snapshot' })).toBeEnabled();
 
+  const monitor = page.locator('#safe-monitor-toggle');
+  await expect(monitor).toBeEnabled({ timeout: 10_000 });
+  await expect(monitor).not.toBeChecked();
+  await monitor.check();
+  await expect(
+    page.getByText(
+      'Use headphones only. Stop monitoring immediately if feedback or an unexpectedly loud signal occurs.',
+    ),
+  ).toBeVisible();
+  await monitor.uncheck();
+
   await page.getByRole('button', { name: 'Stop Signal Health' }).click();
   await expect(page.getByRole('status')).toHaveText('Stopped');
 });

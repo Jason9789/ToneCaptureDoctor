@@ -72,8 +72,20 @@ export interface TestLogEvent {
 export interface TestLogExport {
   events: TestLogEvent[];
   exportedAt: string;
+  integrity: TestLogIntegrity;
   schemaVersion: number;
   session: TestLogSession;
+}
+
+export interface TestLogIntegrity {
+  duplicateSequenceCount: number;
+  eventCount: number;
+  hasSessionEnded: boolean;
+  isContiguous: boolean;
+  lastSequence: number | null;
+  missingSequenceCount: number;
+  firstSequence: number | null;
+  sequenceGapCount: number;
 }
 
 export async function listTestLogSessions(): Promise<TestLogSession[]> {
@@ -417,6 +429,39 @@ export async function appendTestLogEvents(events: TestLogEvent[]): Promise<void>
   }
 }
 
+export function summarizeTestLogIntegrity(events: TestLogEvent[]): TestLogIntegrity {
+  const sorted = [...events].sort((left, right) => left.sequence - right.sequence);
+  let duplicateSequenceCount = 0;
+  let missingSequenceCount = 0;
+  let sequenceGapCount = 0;
+
+  for (let index = 1; index < sorted.length; index += 1) {
+    const previous = sorted[index - 1]?.sequence;
+    const current = sorted[index]?.sequence;
+    if (previous === undefined || current === undefined) {
+      continue;
+    }
+    const delta = current - previous;
+    if (delta === 0) {
+      duplicateSequenceCount += 1;
+    } else if (delta > 1) {
+      sequenceGapCount += 1;
+      missingSequenceCount += delta - 1;
+    }
+  }
+
+  return {
+    duplicateSequenceCount,
+    eventCount: sorted.length,
+    hasSessionEnded: sorted.some((event) => event.eventType === 'session-ended'),
+    isContiguous: duplicateSequenceCount === 0 && missingSequenceCount === 0,
+    lastSequence: sorted.at(-1)?.sequence ?? null,
+    missingSequenceCount,
+    firstSequence: sorted[0]?.sequence ?? null,
+    sequenceGapCount,
+  };
+}
+
 export async function deleteTestLogSession(sessionId: string): Promise<void> {
   if (!hasIndexedDb()) {
     memorySessions.delete(sessionId);
@@ -472,6 +517,7 @@ export async function exportTestLog(sessionId: string): Promise<TestLogExport> {
       return {
         events: events.sort((left, right) => left.sequence - right.sequence),
         exportedAt: new Date().toISOString(),
+        integrity: summarizeTestLogIntegrity(events),
         schemaVersion: TEST_LOG_SCHEMA_VERSION,
         session: storedSession,
       };
@@ -484,6 +530,7 @@ export async function exportTestLog(sessionId: string): Promise<TestLogExport> {
   return {
     events: events.sort((left, right) => left.sequence - right.sequence),
     exportedAt: new Date().toISOString(),
+    integrity: summarizeTestLogIntegrity(events),
     schemaVersion: TEST_LOG_SCHEMA_VERSION,
     session,
   };
@@ -502,10 +549,18 @@ export class TestLogWriter {
   private flushPromise: Promise<void> | undefined;
   private startPromise: Promise<void> | undefined;
   private readonly onError?: (error: unknown) => void;
+  private readonly persistEvents: (events: TestLogEvent[]) => Promise<void>;
 
-  constructor(session: TestLogSession, options: { onError?: (error: unknown) => void } = {}) {
+  constructor(
+    session: TestLogSession,
+    options: {
+      onError?: (error: unknown) => void;
+      persistEvents?: (events: TestLogEvent[]) => Promise<void>;
+    } = {},
+  ) {
     this.session = session;
     this.onError = options.onError;
+    this.persistEvents = options.persistEvents ?? appendTestLogEvents;
   }
 
   async start(): Promise<void> {
@@ -610,12 +665,16 @@ export class TestLogWriter {
       return this.flushPromise;
     }
     this.flushPromise = (async () => {
-      if (this.pendingEvents.length === 0) {
-        return;
+      while (this.pendingEvents.length > 0) {
+        const events = this.pendingEvents;
+        this.pendingEvents = [];
+        try {
+          await this.persistEvents(events);
+        } catch (error) {
+          this.pendingEvents = [...events, ...this.pendingEvents];
+          throw error;
+        }
       }
-      const events = this.pendingEvents;
-      await appendTestLogEvents(events);
-      this.pendingEvents = this.pendingEvents.slice(events.length);
     })();
     try {
       await this.flushPromise;

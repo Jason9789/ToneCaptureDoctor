@@ -3,6 +3,7 @@ import {
   listSnapshots,
   parseSnapshotRecord,
   saveSnapshotsAndLogsAtomically,
+  summarizeTestLogIntegrity,
   type TestLogExport,
   type TestLogEvent,
   type SnapshotRecord,
@@ -380,6 +381,7 @@ function parseReportLogs(report: unknown): TestLogExport[] {
         Number.isFinite(Date.parse(candidate.exportedAt))
           ? candidate.exportedAt
           : new Date().toISOString(),
+      integrity: summarizeTestLogIntegrity(events),
       schemaVersion: TONECHECK_SCHEMA_VERSION,
       session: {
         appVersion: session.appVersion,

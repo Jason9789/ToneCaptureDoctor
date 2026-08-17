@@ -21,6 +21,7 @@ export type AudioAnalysisDiagnosticCode =
 export interface AudioAnalysisDiagnostic {
   code: AudioAnalysisDiagnosticCode;
   detail: string;
+  stage?: AudioAnalysisStartupStage;
 }
 
 export interface AudioAnalysisErrorOptions extends ErrorOptions {
@@ -30,6 +31,9 @@ export interface AudioAnalysisErrorOptions extends ErrorOptions {
 
 const ANALYSER_MIN_DBFS = -100;
 const ANALYSER_MAX_DBFS = 0;
+const MAX_ANALYSIS_CHANNELS = 2;
+const SAFE_MONITOR_GAIN = 0.1;
+const MONITOR_RAMP_SECONDS = 0.02;
 
 export class AudioAnalysisError extends Error {
   readonly code: AudioAnalysisDiagnosticCode;
@@ -48,13 +52,26 @@ export class AudioAnalysisError extends Error {
 export interface AudioAnalysisFallback {
   code: 'worklet-unsupported' | 'worklet-start-failed';
   detail: string;
+  stage?: AudioAnalysisStartupStage;
 }
+
+export type AudioAnalysisStartupStage =
+  | 'audio-context'
+  | 'audio-worklet-capability'
+  | 'audio-worklet-module'
+  | 'audio-worklet-node'
+  | 'audio-graph'
+  | 'audio-resume'
+  | 'media-source';
 
 export interface AudioAnalysisSession {
   analyser: AnalyserNode;
+  channelAnalysers?: AnalyserNode[];
+  channelSplitter?: ChannelSplitterNode;
   context: AudioContext;
   engine: AudioAnalysisEngine;
   fallback?: AudioAnalysisFallback;
+  monitorGain: GainNode;
   muteGain: GainNode;
   node?: AudioWorkletNode;
   pollHandle?: number;
@@ -91,11 +108,7 @@ export interface DryWetAnalysisOptions {
 }
 
 function hasAudioWorkletSupport(): boolean {
-  return (
-    typeof AudioContext !== 'undefined' &&
-    typeof AudioWorkletNode !== 'undefined' &&
-    typeof AudioContext.prototype.audioWorklet?.addModule === 'function'
-  );
+  return typeof AudioContext !== 'undefined' && typeof AudioWorkletNode !== 'undefined';
 }
 
 function createAudioContext(sampleRate?: number): AudioContext {
@@ -107,6 +120,28 @@ function createAudioContext(sampleRate?: number): AudioContext {
     );
   }
   return new AudioContext(sampleRate ? { sampleRate } : undefined);
+}
+
+function getAnalysisChannelCount(stream: MediaStream, source: MediaStreamAudioSourceNode): number {
+  const trackChannelCount = stream.getAudioTracks()[0]?.getSettings().channelCount;
+  const sourceChannelCount = source.channelCount;
+  const requestedChannelCount = Number.isFinite(sourceChannelCount)
+    ? sourceChannelCount
+    : trackChannelCount;
+  return Math.max(1, Math.min(MAX_ANALYSIS_CHANNELS, Math.round(requestedChannelCount || 1)));
+}
+
+export function setAudioMonitorEnabled(session: AudioAnalysisSession, enabled: boolean): void {
+  const gain = session.monitorGain.gain;
+  const target = enabled ? SAFE_MONITOR_GAIN : 0;
+  const currentTime = session.context.currentTime;
+  try {
+    gain.cancelScheduledValues(currentTime);
+    gain.setValueAtTime(gain.value, currentTime);
+    gain.linearRampToValueAtTime(target, currentTime + MONITOR_RAMP_SECONDS);
+  } catch {
+    gain.value = target;
+  }
 }
 
 function describeUnknownError(error: unknown): string {
@@ -148,6 +183,22 @@ function audioAnalysisDiagnostic(
   return { code: fallbackCode, detail: describeUnknownError(error) };
 }
 
+function describeStartupFailure(stage: AudioAnalysisStartupStage, error: unknown): string {
+  return `${stage}: ${describeUnknownError(error)}`;
+}
+
+function getAudioWorklet(context: AudioContext): AudioWorklet {
+  const audioWorklet = context.audioWorklet;
+  if (!audioWorklet || typeof audioWorklet.addModule !== 'function') {
+    throw new AudioAnalysisError(
+      'unavailable',
+      'This browser does not provide a usable AudioWorklet instance.',
+      { code: 'worklet-unsupported' },
+    );
+  }
+  return audioWorklet;
+}
+
 async function startAudioWorkletAnalysis(
   stream: MediaStream,
   onMetrics: AudioMetricsHandler,
@@ -178,10 +229,19 @@ async function startAudioWorkletAnalysis(
   let node: AudioWorkletNode | undefined;
   let analyser: AnalyserNode | undefined;
   let muteGain: GainNode | undefined;
+  let monitorGain: GainNode | undefined;
+  let stage: AudioAnalysisStartupStage = 'audio-worklet-capability';
 
   try {
-    await context.audioWorklet.addModule(new URL('./audioAnalyzer.worklet.ts', import.meta.url));
+    const audioWorklet = getAudioWorklet(context);
+    stage = 'audio-worklet-module';
+    await audioWorklet.addModule.call(
+      audioWorklet,
+      new URL('./audioAnalyzer.worklet.ts', import.meta.url),
+    );
+    stage = 'media-source';
     source = context.createMediaStreamSource(stream);
+    stage = 'audio-worklet-node';
     node = new AudioWorkletNode(context, AUDIO_WORKLET_PROCESSOR_NAME, {
       numberOfInputs: 1,
       numberOfOutputs: 1,
@@ -194,22 +254,29 @@ async function startAudioWorkletAnalysis(
     analyser.maxDecibels = ANALYSER_MAX_DBFS;
     muteGain = context.createGain();
     muteGain.gain.value = 0;
+    monitorGain = context.createGain();
+    monitorGain.gain.value = 0;
 
     node.port.onmessage = (event: MessageEvent<AudioMetrics>) => onMetrics(event.data);
+    stage = 'audio-graph';
     source.connect(node);
     source.connect(analyser);
     // Keep the graph alive without sending the microphone back to the speakers.
     node.connect(muteGain);
     analyser.connect(muteGain);
     muteGain.connect(context.destination);
+    source.connect(monitorGain);
+    monitorGain.connect(context.destination);
+    stage = 'audio-resume';
     await context.resume();
 
-    return { analyser, context, engine: 'audio-worklet', muteGain, node, source };
+    return { analyser, context, engine: 'audio-worklet', monitorGain, muteGain, node, source };
   } catch (error) {
     source?.disconnect();
     node?.disconnect();
     analyser?.disconnect();
     muteGain?.disconnect();
+    monitorGain?.disconnect();
     await context.close().catch(() => undefined);
     throw new AudioAnalysisError(
       'unavailable',
@@ -220,7 +287,8 @@ async function startAudioWorkletAnalysis(
         diagnostics: [
           {
             code: 'worklet-start-failed',
-            detail: describeUnknownError(error),
+            detail: describeStartupFailure(stage, error),
+            stage,
           },
         ],
       },
@@ -250,7 +318,10 @@ async function startAnalyserFallback(
 
   let source: MediaStreamAudioSourceNode | undefined;
   let analyser: AnalyserNode | undefined;
+  let channelAnalysers: AnalyserNode[] = [];
+  let channelSplitter: ChannelSplitterNode | undefined;
   let muteGain: GainNode | undefined;
+  let monitorGain: GainNode | undefined;
   let pollHandle: number | undefined;
 
   try {
@@ -260,32 +331,65 @@ async function startAnalyserFallback(
     analyser.smoothingTimeConstant = 0;
     analyser.minDecibels = ANALYSER_MIN_DBFS;
     analyser.maxDecibels = ANALYSER_MAX_DBFS;
+    const channelCount = getAnalysisChannelCount(stream, source);
+    channelSplitter = context.createChannelSplitter(channelCount);
+    channelAnalysers = Array.from({ length: channelCount }, () => {
+      const channelAnalyser = context.createAnalyser();
+      channelAnalyser.fftSize = 2_048;
+      channelAnalyser.smoothingTimeConstant = 0;
+      channelAnalyser.minDecibels = ANALYSER_MIN_DBFS;
+      channelAnalyser.maxDecibels = ANALYSER_MAX_DBFS;
+      return channelAnalyser;
+    });
     muteGain = context.createGain();
     muteGain.gain.value = 0;
+    monitorGain = context.createGain();
+    monitorGain.gain.value = 0;
+    const displayAnalyser = analyser;
+    const outputGain = muteGain;
+    const monitorOutputGain = monitorGain;
+    if (!displayAnalyser || !outputGain || !monitorOutputGain) {
+      throw new Error('The compatibility analyser graph could not be created.');
+    }
 
-    const frame = new Float32Array(analyser.fftSize);
+    const frames = channelAnalysers.map(() => new Float32Array(displayAnalyser.fftSize));
     const analyzer = createAudioAnalyzer({
-      fftSize: analyser.fftSize,
+      fftSize: displayAnalyser.fftSize,
       sampleRate: context.sampleRate,
     });
     const poll = () => {
-      analyser?.getFloatTimeDomainData(frame);
-      onMetrics(analyzer.pushFrame([frame]));
+      channelAnalysers.forEach((channelAnalyser, channelIndex) => {
+        const frame = frames[channelIndex];
+        if (frame) {
+          channelAnalyser.getFloatTimeDomainData(frame);
+        }
+      });
+      onMetrics(analyzer.pushFrame(frames));
     };
 
     source.connect(analyser);
+    source.connect(channelSplitter);
+    channelAnalysers.forEach((channelAnalyser, channelIndex) => {
+      channelSplitter?.connect(channelAnalyser, channelIndex);
+      channelAnalyser.connect(outputGain);
+    });
     // Keep the graph alive without sending the microphone back to the speakers.
-    analyser.connect(muteGain);
-    muteGain.connect(context.destination);
+    displayAnalyser.connect(outputGain);
+    outputGain.connect(context.destination);
+    source.connect(monitorOutputGain);
+    monitorOutputGain.connect(context.destination);
     await context.resume();
     poll();
     pollHandle = window.setInterval(poll, 1_000 / 30);
 
     return {
       analyser,
+      channelAnalysers,
+      channelSplitter,
       context,
       engine: 'analyser-fallback',
       fallback,
+      monitorGain: monitorOutputGain,
       muteGain,
       pollHandle,
       source,
@@ -296,7 +400,10 @@ async function startAnalyserFallback(
     }
     source?.disconnect();
     analyser?.disconnect();
+    channelAnalysers.forEach((channelAnalyser) => channelAnalyser.disconnect());
+    channelSplitter?.disconnect();
     muteGain?.disconnect();
+    monitorGain?.disconnect();
     await context.close().catch(() => undefined);
     throw new AudioAnalysisError(
       'unavailable',
@@ -340,6 +447,7 @@ export async function startAudioAnalysis(
   const fallback: AudioAnalysisFallback = {
     code: fallbackCode,
     detail: describeAudioAnalysisError(workletFailure),
+    stage: workletFailure.diagnostics[0]?.stage,
   };
 
   try {
@@ -394,14 +502,41 @@ export async function startDryWetAnalysis(
     });
   }
 
-  const context = createAudioContext(options.sampleRate);
+  let context: AudioContext;
+  let stage: AudioAnalysisStartupStage = 'audio-context';
+  try {
+    context = createAudioContext(options.sampleRate);
+  } catch (error) {
+    throw new AudioAnalysisError(
+      'unavailable',
+      'The browser could not create a local dry/wet audio context.',
+      {
+        cause: error,
+        code: 'dry-wet-start-failed',
+        diagnostics: [
+          {
+            code: 'dry-wet-start-failed',
+            detail: describeStartupFailure(stage, error),
+            stage,
+          },
+        ],
+      },
+    );
+  }
   let source: MediaStreamAudioSourceNode | undefined;
   let node: AudioWorkletNode | undefined;
   let muteGain: GainNode | undefined;
 
   try {
-    await context.audioWorklet.addModule(new URL('./dryWetAnalyzer.worklet.ts', import.meta.url));
+    const audioWorklet = getAudioWorklet(context);
+    stage = 'audio-worklet-module';
+    await audioWorklet.addModule.call(
+      audioWorklet,
+      new URL('./dryWetAnalyzer.worklet.ts', import.meta.url),
+    );
+    stage = 'media-source';
     source = context.createMediaStreamSource(stream);
+    stage = 'audio-worklet-node';
     node = new AudioWorkletNode(context, 'tone-capture-doctor-dry-wet-analyzer', {
       channelCount: Math.max(options.dryChannelIndex, options.wetChannelIndex) + 1,
       channelCountMode: 'explicit',
@@ -448,9 +583,11 @@ export async function startDryWetAnalysis(
         );
       }
     };
+    stage = 'audio-graph';
     source.connect(node);
     node.connect(muteGain);
     muteGain.connect(context.destination);
+    stage = 'audio-resume';
     await context.resume();
 
     return { context, muteGain, node, source };
@@ -468,7 +605,8 @@ export async function startDryWetAnalysis(
         diagnostics: [
           {
             code: 'dry-wet-start-failed',
-            detail: describeUnknownError(error),
+            detail: describeStartupFailure(stage, error),
+            stage,
           },
         ],
       },
@@ -485,7 +623,11 @@ export async function stopAudioAnalysis(session: AudioAnalysisSession): Promise<
   }
   session.source.disconnect();
   session.node?.disconnect();
+  session.channelAnalysers?.forEach((channelAnalyser) => channelAnalyser.disconnect());
+  session.channelSplitter?.disconnect();
   session.analyser.disconnect();
+  setAudioMonitorEnabled(session, false);
+  session.monitorGain.disconnect();
   session.muteGain.disconnect();
   await session.context.close().catch(() => undefined);
 }

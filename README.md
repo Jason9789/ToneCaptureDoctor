@@ -94,9 +94,13 @@ Open the local URL shown by Vite. The Signal Health dashboard requests microphon
 after you explicitly choose Start. The current flow keeps the stream local, shows the selected input
 and actual track settings, and allows you to stop the session.
 
+Monitoring is muted by default. If you explicitly enable **Safe monitor**, the app routes the local
+input through a separate low-level path to the system output. Use headphones, watch for feedback,
+and never connect an amplifier speaker output directly to an interface input.
+
 When an interface is available, a Signal Health session also records structured metric and status
 events in local browser storage. Use **Export test log** to download a JSON file for later review.
-The log contains measurements, settings, timestamps, and algorithm/schema versions; it does not
+The log contains measurements, settings, timestamps, algorithm/schema versions, and a sequence-integrity summary; it does not
 contain raw audio. A raw clip is kept only when you explicitly save a snapshot, and remains local
 to that snapshot. Snapshot metadata can be exported/imported separately as JSON. **Export .tonecheck**
 creates a checksummed session archive; it includes raw clips only when you explicitly saved them.
@@ -316,9 +320,13 @@ Vite가 표시한 로컬 주소를 브라우저에서 엽니다. Signal Health �
 명시적으로 선택한 뒤에만 마이크 권한을 요청합니다. 현재 흐름은 스트림을 로컬에 유지하고,
 선택한 입력과 실제 track 설정을 표시하며, 세션을 중지할 수 있습니다.
 
+모니터링은 기본적으로 음소거되어 있습니다. 사용자가 **안전 모니터링**을 명시적으로 켜면
+로컬 입력을 별도의 낮은 레벨 경로로 시스템 출력에 보냅니다. 헤드폰을 사용하고 피드백을
+주의하며, 앰프 speaker output을 인터페이스 입력에 직접 연결하지 마세요.
+
 오인페이를 연결할 수 있는 환경에서는 Signal Health 세션의 지표·상태 이벤트를 브라우저 로컬
 저장소에 구조화해 기록합니다. **테스트 로그 내보내기**로 나중에 검토할 JSON을 받을 수 있습니다.
-로그에는 측정값, 설정, 시각, 알고리즘/스키마 버전이 들어가며 raw audio는 들어가지 않습니다. raw
+로그에는 측정값, 설정, 시각, 알고리즘/스키마 버전과 sequence 무결성 요약이 들어가며 raw audio는 들어가지 않습니다. raw
 clip은 사용자가 스냅샷 저장을 명시적으로 선택한 경우에만 해당 스냅샷에 로컬로 보관됩니다.
 스냅샷 metadata는 별도의 JSON으로 export/import할 수 있습니다. **.tonecheck 내보내기**는 checksum이
 있는 session archive를 만들며, 사용자가 명시적으로 저장한 스냅샷의 raw clip만 포함합니다.

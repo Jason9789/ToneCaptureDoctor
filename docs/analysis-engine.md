@@ -9,10 +9,11 @@ values are suitable for drawing, but they are not persisted or used for diagnosi
 1. `AudioWorkletProcessor` receives each browser render quantum and sends every channel to
    `audio-core`.
 2. If `AudioWorklet` is unavailable or cannot initialize, Signal Health uses an `AnalyserNode`
-   compatibility path. It polls float time-domain frames at approximately 30 Hz and feeds them
-   into the same deterministic `audio-core` analyzer. The session log records the selected engine
-   and the sanitized fallback reason. Dry/Wet Doctor remains AudioWorklet-only because it requires
-   synchronized two-channel frames.
+   compatibility path. A display analyser remains separate from the measurement path; a
+   `ChannelSplitterNode` polls one analyser per input channel at approximately 30 Hz and feeds all
+   channel frames into the same deterministic `audio-core` analyzer. The session log records the
+   selected engine, fallback stage, and sanitized fallback reason. Dry/Wet Doctor remains
+   AudioWorklet-only because it requires synchronized two-channel frames.
 3. The engine keeps cumulative sample coordinates and preallocated per-channel ring buffers.
 4. Peak, RMS, and clipping are calculated for every quantum. FFT work runs every 1,024 samples,
    using the latest 2,048 samples.
@@ -83,6 +84,7 @@ opposite-polarity stereo, persistent 50/60 Hz harmonic hum, 41.2/82.4 Hz false-p
 broadband noise, tonal noise-floor rejection, interval aggregation, and malformed comparison data.
 
 Actual audio-interface behavior, browser scheduling under long sessions, analog noise, clock drift,
-fallback scheduling under long sessions, and macOS/Windows device variation remain human/device
-gates. Exported test logs include sample-time coordinates, confidence values, analysis engine, and
-fallback diagnostics so those runs can be analyzed later without uploading raw audio.
+fallback scheduling under long sessions, AudioWorklet browser compatibility, and macOS/Windows
+device variation remain human/device gates. Exported test logs include sample-time coordinates,
+confidence values, analysis engine, fallback stage, and a sequence-integrity summary so those runs
+can be analyzed later without uploading raw audio.

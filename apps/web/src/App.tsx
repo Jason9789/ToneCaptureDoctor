@@ -22,6 +22,7 @@ import {
   type AudioAnalysisEngine,
   startAudioAnalysis,
   startDryWetAnalysis,
+  setAudioMonitorEnabled,
   type AudioAnalysisSession,
   type DryWetAnalysisSession,
   stopAudioAnalysis,
@@ -120,6 +121,7 @@ export function App() {
   );
   const [analysisEngine, setAnalysisEngine] = useState<AudioAnalysisEngine | null>(null);
   const [analysisDiagnostic, setAnalysisDiagnostic] = useState<string | null>(null);
+  const [monitorEnabled, setMonitorEnabled] = useState(false);
   const [connectionNotice, setConnectionNotice] = useState<keyof Messages['connection'] | null>(
     null,
   );
@@ -219,6 +221,7 @@ export function App() {
       setAnalysisStatus('starting');
       setAnalysisEngine(null);
       setAnalysisDiagnostic(null);
+      setMonitorEnabled(false);
       setConnectionNotice(null);
       resetDryWetState();
       setDryWetStatus((nextSession.settings.channelCount ?? 0) >= 2 ? 'starting' : 'unavailable');
@@ -276,6 +279,7 @@ export function App() {
     setAnalysisStatus('unavailable');
     setAnalysisEngine(null);
     setAnalysisDiagnostic(null);
+    setMonitorEnabled(false);
     setConnectionNotice(null);
     resetDryWetState();
     setDryWetStatus('unavailable');
@@ -283,6 +287,18 @@ export function App() {
     setSelectedDeviceId('');
     updateStatus('stopped');
   }, [resetDryWetState, updateStatus]);
+
+  const handleMonitorChange = useCallback((enabled: boolean) => {
+    const analysis = analysisRef.current;
+    if (!analysis) {
+      return;
+    }
+    setAudioMonitorEnabled(analysis, enabled);
+    setMonitorEnabled(enabled);
+    logWriterRef.current?.append('status', {
+      monitorStatus: enabled ? 'enabled' : 'disabled',
+    });
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -351,6 +367,7 @@ export function App() {
           analysisEngine: nextAnalysis.engine,
           analysisFallbackCode: nextAnalysis.fallback?.code,
           analysisFallbackDetail: nextAnalysis.fallback?.detail,
+          analysisFallbackStage: nextAnalysis.fallback?.stage,
         });
       })
       .catch((error: unknown) => {
@@ -417,6 +434,7 @@ export function App() {
             analysisEngine: 'dry-wet',
             analysisError: diagnostic,
             analysisErrorCode: error.code,
+            analysisErrorStage: error.diagnostics[0]?.stage,
           });
         },
         onStatus: (nextStatus) => {
@@ -444,6 +462,8 @@ export function App() {
           analysisEngine: 'dry-wet',
           analysisError: diagnostic,
           analysisErrorCode: error instanceof AudioAnalysisError ? error.code : 'unknown',
+          analysisErrorStage:
+            error instanceof AudioAnalysisError ? error.diagnostics[0]?.stage : undefined,
         });
       });
 
@@ -856,6 +876,30 @@ export function App() {
           >
             {isRequesting ? t.input.requesting : hasSession ? t.input.stop : t.input.start}
           </button>
+          {session && (
+            <div className="monitor-control">
+              <p className="field-label">{t.monitor.title}</p>
+              <p>{t.monitor.description}</p>
+              <label className="checkbox-label" htmlFor="safe-monitor-toggle">
+                <input
+                  checked={monitorEnabled}
+                  disabled={analysisStatus !== 'active'}
+                  id="safe-monitor-toggle"
+                  onChange={(event) => handleMonitorChange(event.currentTarget.checked)}
+                  type="checkbox"
+                />
+                {monitorEnabled ? t.monitor.enabled : t.monitor.enable}
+              </label>
+              {analysisStatus !== 'active' && (
+                <p className="analysis-detail">{t.monitor.unavailable}</p>
+              )}
+              {monitorEnabled && (
+                <p className="warning-message" role="alert">
+                  {t.monitor.warning}
+                </p>
+              )}
+            </div>
+          )}
         </article>
 
         <article className="panel">

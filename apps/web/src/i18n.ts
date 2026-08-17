@@ -229,6 +229,14 @@ export interface Messages {
     start: string;
     stop: string;
   };
+  monitor: {
+    description: string;
+    enable: string;
+    enabled: string;
+    title: string;
+    unavailable: string;
+    warning: string;
+  };
   routing: {
     description: string;
     eyebrow: string;
@@ -482,6 +490,16 @@ export const MESSAGES: Record<Locale, Messages> = {
       requesting: 'Requesting permission…',
       start: 'Start Signal Health',
       stop: 'Stop Signal Health',
+    },
+    monitor: {
+      description:
+        'Optionally route the local input to the system output at a low level. Use headphones to reduce feedback risk.',
+      enable: 'Enable safe monitor',
+      enabled: 'Safe monitor enabled',
+      title: 'Safe monitor · default off',
+      unavailable: 'Start Signal Health and wait for live metrics before enabling monitoring.',
+      warning:
+        'Use headphones only. Stop monitoring immediately if feedback or an unexpectedly loud signal occurs.',
     },
     routing: {
       description:
@@ -777,6 +795,15 @@ export const MESSAGES: Record<Locale, Messages> = {
       requesting: '권한 요청 중…',
       start: 'Signal Health 시작',
       stop: 'Signal Health 중지',
+    },
+    monitor: {
+      description:
+        '로컬 입력을 낮은 레벨로 시스템 출력에 보낼 수 있습니다. 피드백 위험을 줄이려면 헤드폰을 사용하세요.',
+      enable: '안전 모니터링 켜기',
+      enabled: '안전 모니터링 켜짐',
+      title: '안전 모니터링 · 기본 꺼짐',
+      unavailable: 'Signal Health를 시작하고 실시간 지표가 준비된 뒤 모니터링을 켜세요.',
+      warning: '헤드폰만 사용하세요. 피드백이나 예상보다 큰 소리가 나면 즉시 모니터링을 끄세요.',
     },
     routing: {
       description:

@@ -8,6 +8,7 @@ import {
   deleteSnapshot,
   exportSnapshots,
   exportTestLog,
+  appendTestLogEvents,
   importSnapshots,
   listSnapshots,
   saveSnapshot,
@@ -72,6 +73,61 @@ describe('local test session storage', () => {
     });
     expect(exported.events[1]?.payload).not.toHaveProperty('waveform');
     expect(exported.events[1]?.payload).not.toHaveProperty('rawAudio');
+    expect(exported.integrity).toMatchObject({
+      eventCount: 3,
+      isContiguous: true,
+      missingSequenceCount: 0,
+    });
+  });
+
+  it('preserves events appended while an IndexedDB flush is in flight', async () => {
+    await clearAllLocalData();
+    const sessionId = createSessionId();
+    let persistCallCount = 0;
+    let releasePersist: () => void = () => undefined;
+    let resolvePersistStarted: () => void = () => undefined;
+    const persistStarted = new Promise<void>((resolve) => {
+      resolvePersistStarted = resolve;
+    });
+    const writer = new TestLogWriter(
+      {
+        appVersion: 'test',
+        locale: 'en',
+        sessionId,
+        startedAt: new Date().toISOString(),
+        trackSettings: { channelCount: 1, sampleRate: 48_000 },
+      },
+      {
+        persistEvents: async (events) => {
+          persistCallCount += 1;
+          if (persistCallCount === 2) {
+            resolvePersistStarted();
+            await new Promise<void>((resolve) => {
+              releasePersist = resolve;
+            });
+          }
+          await appendTestLogEvents(events);
+        },
+      },
+    );
+
+    await writer.start();
+    writer.append('status', { status: 'before-flush' });
+    const flushPromise = writer.flushPending();
+    await persistStarted;
+    writer.append('status', { status: 'during-flush' });
+    releasePersist();
+    await flushPromise;
+    await writer.finish('stopped');
+
+    const exported = await exportTestLog(sessionId);
+    expect(exported.events.map((event) => event.sequence)).toEqual([0, 1, 2, 3]);
+    expect(exported.integrity).toMatchObject({
+      eventCount: 4,
+      isContiguous: true,
+      missingSequenceCount: 0,
+    });
+    await clearAllLocalData();
   });
 
   it('round-trips snapshot metadata through a local JSON export', async () => {
