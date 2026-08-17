@@ -78,6 +78,14 @@ export interface AudioAnalysisSession {
   source: MediaStreamAudioSourceNode;
 }
 
+export interface AudioMonitorDiagnostics {
+  monitorContextState: AudioContextState;
+  monitorDestinationChannelCount: number;
+  monitorDestinationMaxChannelCount: number;
+  monitorGain: number;
+  monitorOutputRoute: 'system-default';
+}
+
 export interface DryWetAnalysisSession {
   context: AudioContext;
   muteGain: GainNode;
@@ -142,6 +150,17 @@ export function setAudioMonitorEnabled(session: AudioAnalysisSession, enabled: b
   } catch {
     gain.value = target;
   }
+}
+
+export function getAudioMonitorDiagnostics(session: AudioAnalysisSession): AudioMonitorDiagnostics {
+  const destination = session.context.destination;
+  return {
+    monitorContextState: session.context.state,
+    monitorDestinationChannelCount: destination.channelCount ?? 0,
+    monitorDestinationMaxChannelCount: destination.maxChannelCount ?? 0,
+    monitorGain: session.monitorGain.gain.value,
+    monitorOutputRoute: 'system-default',
+  };
 }
 
 function describeUnknownError(error: unknown): string {

@@ -96,7 +96,10 @@ and actual track settings, and allows you to stop the session.
 
 Monitoring is muted by default. If you explicitly enable **Safe monitor**, the app routes the local
 input through a separate low-level path to the system output. Use headphones, watch for feedback,
-and never connect an amplifier speaker output directly to an interface input.
+and never connect an amplifier speaker output directly to an interface input. The route is the
+operating system's system-default output; the browser cannot prove physical speaker audibility.
+Waveform display follows the most energetic input channel when an interface carries the instrument
+on its second channel.
 
 When an interface is available, a Signal Health session also records structured metric and status
 events in local browser storage. Use **Export test log** to download a JSON file for later review.
@@ -322,7 +325,10 @@ Vite가 표시한 로컬 주소를 브라우저에서 엽니다. Signal Health �
 
 모니터링은 기본적으로 음소거되어 있습니다. 사용자가 **안전 모니터링**을 명시적으로 켜면
 로컬 입력을 별도의 낮은 레벨 경로로 시스템 출력에 보냅니다. 헤드폰을 사용하고 피드백을
-주의하며, 앰프 speaker output을 인터페이스 입력에 직접 연결하지 마세요.
+주의하며, 앰프 speaker output을 인터페이스 입력에 직접 연결하지 마세요. 출력 경로는
+운영체제의 시스템 기본 출력이며 브라우저 로그만으로 실제 스피커에서 소리가 났는지는
+확인할 수 없습니다. 오인페이의 두 번째 채널에 악기가 연결된 경우 waveform은 가장 신호가
+큰 입력 채널을 표시합니다.
 
 오인페이를 연결할 수 있는 환경에서는 Signal Health 세션의 지표·상태 이벤트를 브라우저 로컬
 저장소에 구조화해 기록합니다. **테스트 로그 내보내기**로 나중에 검토할 JSON을 받을 수 있습니다.

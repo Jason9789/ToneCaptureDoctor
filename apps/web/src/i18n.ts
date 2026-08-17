@@ -233,6 +233,7 @@ export interface Messages {
     description: string;
     enable: string;
     enabled: string;
+    outputRoute: string;
     title: string;
     unavailable: string;
     warning: string;
@@ -496,6 +497,7 @@ export const MESSAGES: Record<Locale, Messages> = {
         'Optionally route the local input to the system output at a low level. Use headphones to reduce feedback risk.',
       enable: 'Enable safe monitor',
       enabled: 'Safe monitor enabled',
+      outputRoute: 'Output route: system default (choose the output in your operating system).',
       title: 'Safe monitor · default off',
       unavailable: 'Start Signal Health and wait for live metrics before enabling monitoring.',
       warning:
@@ -801,6 +803,7 @@ export const MESSAGES: Record<Locale, Messages> = {
         '로컬 입력을 낮은 레벨로 시스템 출력에 보낼 수 있습니다. 피드백 위험을 줄이려면 헤드폰을 사용하세요.',
       enable: '안전 모니터링 켜기',
       enabled: '안전 모니터링 켜짐',
+      outputRoute: '출력 경로: 시스템 기본 출력(운영체제에서 출력 장치를 선택하세요).',
       title: '안전 모니터링 · 기본 꺼짐',
       unavailable: 'Signal Health를 시작하고 실시간 지표가 준비된 뒤 모니터링을 켜세요.',
       warning: '헤드폰만 사용하세요. 피드백이나 예상보다 큰 소리가 나면 즉시 모니터링을 끄세요.',

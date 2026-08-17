@@ -19,6 +19,7 @@ import {
 import {
   AudioAnalysisError,
   describeAudioAnalysisError,
+  getAudioMonitorDiagnostics,
   type AudioAnalysisEngine,
   startAudioAnalysis,
   startDryWetAnalysis,
@@ -297,6 +298,7 @@ export function App() {
     setMonitorEnabled(enabled);
     logWriterRef.current?.append('status', {
       monitorStatus: enabled ? 'enabled' : 'disabled',
+      ...getAudioMonitorDiagnostics(analysis),
     });
   }, []);
 
@@ -368,6 +370,8 @@ export function App() {
           analysisFallbackCode: nextAnalysis.fallback?.code,
           analysisFallbackDetail: nextAnalysis.fallback?.detail,
           analysisFallbackStage: nextAnalysis.fallback?.stage,
+          monitorStatus: 'disabled',
+          ...getAudioMonitorDiagnostics(nextAnalysis),
         });
       })
       .catch((error: unknown) => {
@@ -391,6 +395,11 @@ export function App() {
       const currentAnalysis = analysisRef.current;
       analysisRef.current = null;
       if (currentAnalysis) {
+        setAudioMonitorEnabled(currentAnalysis, false);
+        writer.append('status', {
+          monitorStatus: 'disabled',
+          ...getAudioMonitorDiagnostics(currentAnalysis),
+        });
         void stopAudioAnalysis(currentAnalysis);
       }
       const currentClipCapture = clipCaptureRef.current;
@@ -880,6 +889,7 @@ export function App() {
             <div className="monitor-control">
               <p className="field-label">{t.monitor.title}</p>
               <p>{t.monitor.description}</p>
+              <p className="analysis-detail">{t.monitor.outputRoute}</p>
               <label className="checkbox-label" htmlFor="safe-monitor-toggle">
                 <input
                   checked={monitorEnabled}

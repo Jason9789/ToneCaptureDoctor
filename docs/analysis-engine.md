@@ -23,6 +23,11 @@ values are suitable for drawing, but they are not persisted or used for diagnosi
 6. The UI receives summary metrics. A snapshot may be saved only after the engine has produced an
    authoritative waveform and spectrum.
 
+The authoritative waveform is selected from the most energetic analyzed input channel. Peak, RMS,
+clipping, and spectrum still aggregate every channel, so a quiet first channel cannot hide an
+instrument connected to the second interface input while the measurement contract remains
+multi-channel.
+
 `sampleCount`, `reportStartSample`, `reportEndSample`, `analysisFrameStartSample`,
 `analysisFrameEndSample`, and `audioTimeSeconds` preserve the two different time windows. Report
 coordinates cover the UI aggregation interval; analysis coordinates cover the exact FFT waveform.

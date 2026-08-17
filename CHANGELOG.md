@@ -11,6 +11,7 @@
 - Test log flushing now detaches in-flight batches so metrics appended during IndexedDB writes are not dropped; exports include sequence-integrity summaries.
 - AudioWorklet startup failures now record the failing initialization stage, while AnalyserNode fallback measures up to two input channels instead of silently reducing metrics to one channel.
 - Added an explicit, low-level Safe monitor path that is muted by default, ramps only after a user toggle, and warns to use headphones.
+- Waveform display and snapshot waveform storage now follow the most energetic input channel, and monitor status logs include the system-default output route and AudioContext destination diagnostics.
 
 - 한글/영어 `.tonecheck` ZIP export/import, checksum·용량·경로 검증, legacy snapshot migration, atomic import 저장을 추가했습니다.
 - 빌드 HTML에서 hashed asset을 찾아 precache하고 비정적 same-origin 응답을 cache하지 않는 production PWA shell을 추가했습니다.
@@ -21,3 +22,4 @@
 - IndexedDB 저장 중 추가된 metric이 유실되지 않도록 테스트 로그 flush queue를 분리했으며, export 결과에 sequence 무결성 요약을 추가했습니다.
 - AudioWorklet 시작 실패 단계와 원인을 로그에 기록하고, AnalyserNode fallback도 최대 2개 입력 채널을 유지해 분석하도록 보완했습니다.
 - 기본 음소거·사용자 명시 토글·낮은 레벨 ramp·헤드폰 경고를 포함한 안전 모니터링 경로를 추가했습니다.
+- waveform 표시와 스냅샷 waveform 저장이 가장 신호가 큰 입력 채널을 따르도록 보완했으며, 모니터 로그에 시스템 기본 출력 경로와 AudioContext destination 진단 정보를 추가했습니다.

@@ -480,6 +480,34 @@ function emptyFrequencyState(): FrequencyState {
   };
 }
 
+/**
+ * Pick the most energetic channel for the waveform shown in the UI and stored
+ * in a snapshot. Aggregate metrics still use every channel; this only avoids
+ * rendering a silent first channel when an interface carries the instrument
+ * on its second input.
+ */
+function selectDisplayChannel(channels: readonly Float32Array[]): Float32Array | null {
+  let selected: Float32Array | null = null;
+  let selectedRms = -1;
+
+  for (const channel of channels) {
+    if (channel.length === 0) {
+      continue;
+    }
+    let sumSquares = 0;
+    for (const sample of channel) {
+      sumSquares += sample * sample;
+    }
+    const rms = Math.sqrt(sumSquares / channel.length);
+    if (rms > selectedRms) {
+      selected = channel;
+      selectedRms = rms;
+    }
+  }
+
+  return selected;
+}
+
 function createMetrics(
   statistics: FrameStatistics,
   options: Required<AudioAnalysisOptions>,
@@ -539,7 +567,7 @@ export function analyzeAudioFrame(
     frequencyState = {
       analysisFrameEndSample: statistics.sampleCount,
       analysisFrameStartSample: statistics.sampleCount - normalizedOptions.fftSize,
-      analysisWaveform: new Float32Array(channelWindows[0]),
+      analysisWaveform: selectDisplayChannel(channelWindows),
       dominantFrequencyHz: getDominantFrequency(
         spectrumPower,
         normalizedOptions.sampleRate,
@@ -633,7 +661,7 @@ export function createAudioAnalyzer(options: AudioAnalysisOptions): AudioAnalyze
     frequencyState = {
       analysisFrameEndSample: frameEndSample,
       analysisFrameStartSample: Math.max(0, frameEndSample - normalizedOptions.fftSize),
-      analysisWaveform: channelWindows[0] ?? null,
+      analysisWaveform: selectDisplayChannel(channelWindows),
       dominantFrequencyHz: getDominantFrequency(
         spectrumPower,
         normalizedOptions.sampleRate,

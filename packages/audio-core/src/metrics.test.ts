@@ -91,6 +91,14 @@ describe('audio metrics', () => {
     expect(metrics.dominantFrequencyHz).toBeCloseTo(440, 0);
   });
 
+  it('uses the most energetic channel for the displayed waveform', () => {
+    const quiet = new Float32Array(2_048).fill(0.001);
+    const active = sineWave(440, 48_000, 2_048, 0.5);
+    const metrics = analyzeAudioFrame([quiet, active], { sampleRate: 48_000 });
+
+    expect(metrics.analysisWaveform).toEqual(active);
+  });
+
   it.each([
     { expected: 50 as const, frequencies: [50, 100, 150] },
     { expected: 60 as const, frequencies: [60, 120, 180] },

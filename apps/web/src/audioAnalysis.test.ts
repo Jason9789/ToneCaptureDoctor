@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   AudioAnalysisError,
   describeAudioAnalysisError,
+  getAudioMonitorDiagnostics,
   setAudioMonitorEnabled,
   startAudioAnalysis,
   stopAudioAnalysis,
@@ -11,6 +12,11 @@ import {
 class FakeAudioNode {
   readonly connect = vi.fn((node: FakeAudioNode) => node);
   readonly disconnect = vi.fn();
+}
+
+class FakeAudioDestinationNode extends FakeAudioNode {
+  readonly channelCount = 2;
+  readonly maxChannelCount = 2;
 }
 
 class FakeAnalyserNode extends FakeAudioNode {
@@ -42,7 +48,7 @@ let workletApi: { addModule: ReturnType<typeof vi.fn> };
 let failMediaSource = false;
 
 class FakeAudioContext {
-  readonly destination = new FakeAudioNode();
+  readonly destination = new FakeAudioDestinationNode();
   readonly currentTime = 0;
   readonly sampleRate = 48_000;
   readonly state = 'running';
@@ -128,6 +134,13 @@ describe('audio analysis startup', () => {
 
     expect(session.monitorGain.gain.value).toBe(0);
     setAudioMonitorEnabled(session, true);
+    expect(getAudioMonitorDiagnostics(session)).toMatchObject({
+      monitorContextState: 'running',
+      monitorDestinationChannelCount: 2,
+      monitorDestinationMaxChannelCount: 2,
+      monitorGain: 0,
+      monitorOutputRoute: 'system-default',
+    });
     expect(session.monitorGain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.1, 0.02);
     setAudioMonitorEnabled(session, false);
     expect(session.monitorGain.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, 0.02);
